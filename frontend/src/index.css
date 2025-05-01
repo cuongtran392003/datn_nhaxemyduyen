@@ -1,0 +1,18 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+
+p{
+    @apply text-textmobile leading-4 md:text-[14px] md:leading-7;
+}
+.input{
+    @apply focus:outline-none border-b-2 border-b-gray;
+}
+.h1{
+    @apply text-textmobileh1 text-bluecustom my-5 font-semibold
+    md:text-textdesktop;
+}
+.h2{
+    @apply text-[14px] text-bluecustom font-semibold;
+}
