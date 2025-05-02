@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import routeService from "../../service/routeService";
 import tripService from "../../service/tripService";
 import Iconlc1 from "../../assets/icons/iconlc1.png";
@@ -11,22 +11,18 @@ function Routepopular() {
   const [trips, setTrips] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const routesRef = useRef([]); // Lưu trữ routes hiện tại
+  const tripsRef = useRef([]); // Lưu trữ trips hiện tại
 
-  // Lấy ngày hiện tại theo thời gian thực (YYYY-MM-DD)
   const currentDate = new Date().toISOString().split("T")[0];
 
-  // Hàm lấy danh sách tuyến đường và chuyến xe
   const fetchRoutes = async () => {
     try {
       setLoading(true);
 
-      // Lấy danh sách tuyến đường từ API /routes
       const routeData = await routeService.getRoutes();
-
-      // Lấy danh sách chuyến xe từ API /trips
       const tripData = await tripService.getTrips();
 
-      // Lọc các chuyến xe có ngày đi trùng với ngày hiện tại
       const filteredTrips = tripData.filter((trip) => {
         if (!trip.departure_time) return false;
         const departureDate = new Date(trip.departure_time)
@@ -35,9 +31,6 @@ function Routepopular() {
         return departureDate === currentDate;
       });
 
-      setTrips(filteredTrips);
-
-      // Định dạng dữ liệu tuyến đường
       const formattedRoutes = routeData.map((route, index) => ({
         id: route.id || index + 1,
         from: route.from_location,
@@ -47,9 +40,20 @@ function Routepopular() {
         duration: route.duration || "N/A",
         bus_image: route.bus_image || "https://via.placeholder.com/286x185",
         date: currentDate,
-      }));
+      })).slice(0, 4);
 
-      setRoutes(formattedRoutes.slice(0, 4)); // Giới hạn tối đa 4 tuyến
+      // So sánh dữ liệu mới với dữ liệu cũ
+      const routesChanged = JSON.stringify(formattedRoutes) !== JSON.stringify(routesRef.current);
+      const tripsChanged = JSON.stringify(filteredTrips) !== JSON.stringify(tripsRef.current);
+
+      if (routesChanged) {
+        routesRef.current = formattedRoutes;
+        setRoutes(formattedRoutes);
+      }
+      if (tripsChanged) {
+        tripsRef.current = filteredTrips;
+        setTrips(filteredTrips);
+      }
     } catch (err) {
       setError("Đã xảy ra lỗi khi tải dữ liệu: " + err.message);
     } finally {
@@ -57,27 +61,21 @@ function Routepopular() {
     }
   };
 
-  // Gọi hàm lấy dữ liệu khi component được render
   useEffect(() => {
     fetchRoutes();
-    const interval = setInterval(fetchRoutes, 30000); // Cập nhật mỗi 30 giây
+    const interval = setInterval(fetchRoutes, 30000);
 
     return () => clearInterval(interval);
   }, []);
 
-  // Xử lý khi người dùng bấm "Đặt vé"
   const handleBookTicket = (route) => {
     try {
       setLoading(true);
-
-      // Tìm các chuyến xe phù hợp với tuyến đường và ngày hiện tại
       const matchedTrips = trips.filter(
-        (trip) =>
-          trip.from_location === route.from && trip.to_location === route.to
+        (trip) => trip.from_location === route.from && trip.to_location === route.to
       );
 
       if (matchedTrips.length > 0) {
-        // Chuyển hướng đến trang /search và truyền dữ liệu chuyến xe
         navigate("/search", {
           state: {
             trips: matchedTrips,
@@ -87,9 +85,7 @@ function Routepopular() {
           },
         });
       } else {
-        setError(
-          "Không tìm thấy chuyến xe nào cho tuyến đường này vào ngày hôm nay."
-        );
+        setError("Không tìm thấy chuyến xe nào cho tuyến đường này vào ngày hôm nay.");
       }
     } catch (err) {
       setError("Đã xảy ra lỗi khi tìm kiếm chuyến xe: " + err.message);
@@ -98,12 +94,10 @@ function Routepopular() {
     }
   };
 
-  // Hiển thị trạng thái loading
   if (loading) {
     return <div className="text-center p-5">Đang tải dữ liệu...</div>;
   }
 
-  // Hiển thị lỗi nếu có
   if (error) {
     return <div className="text-center p-5 text-red-500">{error}</div>;
   }

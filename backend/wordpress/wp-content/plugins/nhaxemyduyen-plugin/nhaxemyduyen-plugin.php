@@ -741,6 +741,7 @@ function nhaxemyduyen_manage_routes() {
 
 
 // Trang quản lý chuyến xe
+// Trang quản lý chuyến xe
 function nhaxemyduyen_manage_trips() {
     global $wpdb;
     $table_trips = $wpdb->prefix . 'trips';
@@ -754,7 +755,7 @@ function nhaxemyduyen_manage_trips() {
         wp_die('Bạn không có quyền truy cập trang này.');
     }
 
-    // Đăng ký script jQuery UI Datepicker
+    // Đăng ký script và style
     wp_enqueue_script('jquery');
     wp_enqueue_script('jquery-ui-datepicker');
     wp_enqueue_style('jquery-ui-css', '//code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css');
@@ -809,91 +810,6 @@ function nhaxemyduyen_manage_trips() {
         $where_clause = " WHERE " . implode(' AND ', $where_conditions);
     }
 
-    // Xử lý thêm/sửa chuyến xe
-    if (isset($_POST['nhaxemyduyen_trip_action']) && isset($_POST['nhaxemyduyen_trip_nonce']) && wp_verify_nonce($_POST['nhaxemyduyen_trip_nonce'], 'nhaxemyduyen_trip_action')) {
-        $action = $_POST['nhaxemyduyen_trip_action'];
-
-        if (
-            empty($_POST['from_location_id']) ||
-            empty($_POST['to_location_id']) ||
-            empty($_POST['pickup_location']) ||
-            empty($_POST['dropoff_location']) ||
-            empty($_POST['departure_time']) ||
-            empty($_POST['arrival_time']) ||
-            empty($_POST['price']) ||
-            empty($_POST['available_seats'])
-        ) {
-            echo '<div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6 rounded-lg"><p>Lỗi: Vui lòng điền đầy đủ các trường bắt buộc!</p></div>';
-            return;
-        }
-
-        $trip_data = array(
-            'from_location_id' => intval($_POST['from_location_id']),
-            'to_location_id' => intval($_POST['to_location_id']),
-            'pickup_location' => sanitize_text_field($_POST['pickup_location']),
-            'dropoff_location' => sanitize_text_field($_POST['dropoff_location']),
-            'departure_time' => date('Y-m-d H:i:s', strtotime($_POST['departure_time'])),
-            'arrival_time' => date('Y-m-d H:i:s', strtotime($_POST['arrival_time'])),
-            'price' => floatval($_POST['price']),
-            'available_seats' => intval($_POST['available_seats']),
-            'driver_id' => !empty($_POST['driver_id']) ? intval($_POST['driver_id']) : null,
-            'vehicle_id' => !empty($_POST['vehicle_id']) ? intval($_POST['vehicle_id']) : null,
-        );
-
-        $current_time = current_time('mysql');
-
-        if ($action === 'add') {
-            $trip_data['created_at'] = $current_time;
-            $trip_data['updated_at'] = $current_time;
-
-            $result = $wpdb->insert($table_trips, $trip_data);
-            if ($result === false) {
-                echo '<div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6 rounded-lg"><p>Lỗi: Không thể thêm chuyến xe. ' . esc_html($wpdb->last_error) . '</p></div>';
-            } else {
-                wp_redirect(admin_url('admin.php?page=nhaxemyduyen-trips&message=add_success'));
-                exit;
-            }
-        } elseif ($action === 'edit') {
-            $trip_id = intval($_POST['trip_id']);
-            $trip_data['updated_at'] = $current_time;
-
-            $result = $wpdb->update($table_trips, $trip_data, array('trip_id' => $trip_id));
-            if ($result === false) {
-                echo '<div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6 rounded-lg"><p>Lỗi: Không thể cập nhật chuyến xe. ' . esc_html($wpdb->last_error) . '</p></div>';
-            } else {
-                wp_redirect(admin_url('admin.php?page=nhaxemyduyen-trips&message=edit_success'));
-                exit;
-            }
-        }
-    }
-
-    // Xử lý xóa chuyến xe
-    if (isset($_POST['nhaxemyduyen_delete_trip']) && isset($_POST['trip_id']) && isset($_POST['nhaxemyduyen_delete_nonce']) && wp_verify_nonce($_POST['nhaxemyduyen_delete_nonce'], 'nhaxemyduyen_delete_trip')) {
-        $trip_id = intval($_POST['trip_id']);
-        $ticket_count = $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $table_tickets WHERE trip_id = %d", $trip_id));
-        if ($ticket_count > 0) {
-            echo '<div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6 rounded-lg"><p>Không thể xóa chuyến xe vì đã có vé được đặt!</p></div>';
-        } else {
-            $result = $wpdb->delete($table_trips, array('trip_id' => $trip_id));
-            if ($result === false) {
-                echo '<div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6 rounded-lg"><p>Lỗi: Không thể xóa chuyến xe. ' . esc_html($wpdb->last_error) . '</p></div>';
-            } else {
-                wp_redirect(admin_url('admin.php?page=nhaxemyduyen-trips&message=delete_success'));
-                exit;
-            }
-        }
-    }
-
-    // Xử lý hiển thị form chỉnh sửa chuyến xe
-    $trip_to_edit = null;
-    if (isset($_POST['nhaxemyduyen_edit_trip']) && isset($_POST['trip_id']) && isset($_POST['nhaxemyduyen_edit_nonce']) && wp_verify_nonce($_POST['nhaxemyduyen_edit_nonce'], 'nhaxemyduyen_edit_trip')) {
-        $trip_id = intval($_POST['trip_id']);
-        $trip_to_edit = $wpdb->get_row($wpdb->prepare("SELECT * FROM $table_trips WHERE trip_id = %d", $trip_id), ARRAY_A);
-        if ($trip_to_edit && $trip_to_edit['vehicle_id']) {
-            $trip_to_edit['bus_image'] = $wpdb->get_var($wpdb->prepare("SELECT image FROM $table_vehicles WHERE vehicle_id = %d", $trip_to_edit['vehicle_id']));
-        }
-    }
-
     // Lấy danh sách chuyến xe với bộ lọc
     $trips = $wpdb->get_results("
         SELECT t.*, l1.name as from_location, l2.name as to_location, d.name as driver_name, v.license_plate as vehicle_plate, v.image as bus_image
@@ -921,7 +837,7 @@ function nhaxemyduyen_manage_trips() {
     ?>
     <div class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
         <h1 class="text-3xl font-bold text-gray-900 mb-6">Quản lý Chuyến Xe</h1>
-        <?php echo $message; ?>
+        <div id="nhaxe-message"><?php echo $message; ?></div>
 
         <div class="bg-white shadow-lg rounded-lg p-6">
             <h2 class="text-2xl font-semibold text-gray-800 mb-4">Danh sách Chuyến Xe</h2>
@@ -929,7 +845,7 @@ function nhaxemyduyen_manage_trips() {
             <!-- Filter Form and Add Button -->
             <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6">
                 <!-- Filter Form -->
-                <form method="post" action="" class="flex flex-col sm:flex-row sm:items-center space-y-4 sm:space-y-0 sm:space-x-4">
+                <form method="post" action="" class="flex flex-col sm:flex-row sm:items-center space-y-4 sm:space-y-0 sm:space-x-4" id="filter-form">
                     <select name="filter_from_location" id="filter_from_location" class="border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500">
                         <option value="0">-- Chọn điểm đi --</option>
                         <?php foreach ($locations as $location) : ?>
@@ -947,28 +863,28 @@ function nhaxemyduyen_manage_trips() {
                         <?php endforeach; ?>
                     </select>
                     <input type="text" name="filter_departure_date" id="filter_departure_date" 
-                    value="<?php echo esc_attr(!empty($filter_departure_date) ? date('m/d/Y', strtotime($filter_departure_date)) : date('m/d/Y')); ?>
-                    " placeholder="mm/dd/yyyy" class="border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500">
+                           value="<?php echo esc_attr(!empty($filter_departure_date) ? date('m/d/Y', strtotime($filter_departure_date)) : date('m/d/Y')); ?>" 
+                           placeholder="mm/dd/yyyy" class="border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500">
                     <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition">Lọc</button>
                 </form>
 
                 <!-- Add Trip Button -->
-                <button class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition nhaxe-toggle-form mt-4 sm:mt-0">Thêm Chuyến Xe</button>
+                <button class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition nhaxe-toggle-form mt-4 sm:mt-0" data-action="add">Thêm Chuyến Xe</button>
             </div>
 
             <!-- Add/Edit Trip Form -->
             <div class="nhaxe-add-form hidden bg-gray-50 p-6 rounded-lg mb-6">
-                <form method="post" action="">
+                <form id="trip-form" action="">
                     <?php wp_nonce_field('nhaxemyduyen_trip_action', 'nhaxemyduyen_trip_nonce'); ?>
-                    <input type="hidden" name="nhaxemyduyen_trip_action" value="<?php echo $trip_to_edit ? 'edit' : 'add'; ?>">
-                    <input type="hidden" name="trip_id" value="<?php echo $trip_to_edit ? esc_attr($trip_to_edit['trip_id']) : ''; ?>">
+                    <input type="hidden" name="nhaxemyduyen_trip_action" id="trip_action" value="add">
+                    <input type="hidden" name="trip_id" id="trip_id" value="">
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
                             <label for="from_location_id" class="block text-sm font-medium text-gray-700">Điểm đi</label>
                             <select name="from_location_id" id="from_location_id" required class="mt-1 block w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500">
                                 <option value="">-- Chọn điểm đi --</option>
                                 <?php foreach ($locations as $location) : ?>
-                                    <option value="<?php echo esc_attr($location['location_id']); ?>" <?php selected($trip_to_edit && $trip_to_edit['from_location_id'] == $location['location_id']); ?>>
+                                    <option value="<?php echo esc_attr($location['location_id']); ?>">
                                         <?php echo esc_html($location['name']); ?>
                                     </option>
                                 <?php endforeach; ?>
@@ -979,7 +895,7 @@ function nhaxemyduyen_manage_trips() {
                             <select name="to_location_id" id="to_location_id" required class="mt-1 block w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500">
                                 <option value="">-- Chọn điểm đến --</option>
                                 <?php foreach ($locations as $location) : ?>
-                                    <option value="<?php echo esc_attr($location['location_id']); ?>" <?php selected($trip_to_edit && $trip_to_edit['to_location_id'] == $location['location_id']); ?>>
+                                    <option value="<?php echo esc_attr($location['location_id']); ?>">
                                         <?php echo esc_html($location['name']); ?>
                                     </option>
                                 <?php endforeach; ?>
@@ -990,7 +906,7 @@ function nhaxemyduyen_manage_trips() {
                             <select name="driver_id" id="driver_id" class="mt-1 block w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500">
                                 <option value="">-- Chọn tài xế --</option>
                                 <?php foreach ($drivers as $driver) : ?>
-                                    <option value="<?php echo esc_attr($driver['driver_id']); ?>" <?php selected($trip_to_edit && $trip_to_edit['driver_id'] == $driver['driver_id']); ?>>
+                                    <option value="<?php echo esc_attr($driver['driver_id']); ?>">
                                         <?php echo esc_html($driver['name']); ?>
                                     </option>
                                 <?php endforeach; ?>
@@ -1003,8 +919,7 @@ function nhaxemyduyen_manage_trips() {
                                 <?php foreach ($vehicles as $vehicle) : ?>
                                     <option value="<?php echo esc_attr($vehicle['vehicle_id']); ?>" 
                                             data-capacity="<?php echo esc_attr($vehicle['capacity']); ?>" 
-                                            data-image="<?php echo esc_attr($vehicle['image']); ?>"
-                                            <?php selected($trip_to_edit && $trip_to_edit['vehicle_id'] == $vehicle['vehicle_id']); ?>>
+                                            data-image="<?php echo esc_attr($vehicle['image']); ?>">
                                         <?php echo esc_html($vehicle['license_plate']); ?>
                                     </option>
                                 <?php endforeach; ?>
@@ -1012,39 +927,35 @@ function nhaxemyduyen_manage_trips() {
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-gray-700">Hình ảnh xe</label>
-                            <div class="nhaxe-image-preview mt-1">
-                                <?php if ($trip_to_edit && $trip_to_edit['bus_image']) : ?>
-                                    <img src="<?php echo esc_url($trip_to_edit['bus_image']); ?>" alt="Hình ảnh xe" class="max-w-[200px] rounded-lg">
-                                <?php endif; ?>
-                            </div>
+                            <div class="nhaxe-image-preview mt-1"></div>
                         </div>
                         <div>
                             <label for="pickup_location" class="block text-sm font-medium text-gray-700">Điểm đón</label>
-                            <input type="text" name="pickup_location" id="pickup_location" value="<?php echo $trip_to_edit ? esc_attr($trip_to_edit['pickup_location']) : ''; ?>" placeholder="Nhập điểm đón cụ thể" required class="mt-1 block w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500">
+                            <input type="text" name="pickup_location" id="pickup_location" placeholder="Nhập điểm đón cụ thể" required class="mt-1 block w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500">
                         </div>
                         <div>
                             <label for="dropoff_location" class="block text-sm font-medium text-gray-700">Điểm trả</label>
-                            <input type="text" name="dropoff_location" id="dropoff_location" value="<?php echo $trip_to_edit ? esc_attr($trip_to_edit['pickup_location']) : ''; ?>" placeholder="Nhập điểm trả cụ thể" required class="mt-1 block w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500">
+                            <input type="text" name="dropoff_location" id="dropoff_location" placeholder="Nhập điểm trả cụ thể" required class="mt-1 block w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500">
                         </div>
                         <div>
                             <label for="departure_time" class="block text-sm font-medium text-gray-700">Giờ đi</label>
-                            <input type="datetime-local" name="departure_time" id="departure_time" value="<?php echo $trip_to_edit ? esc_attr(date('Y-m-d\TH:i', strtotime($trip_to_edit['departure_time']))) : date('Y-m-d\TH:i'); ?>" required class="mt-1 block w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500">
+                            <input type="datetime-local" name="departure_time" id="departure_time" value="<?php echo date('Y-m-d\TH:i'); ?>" required class="mt-1 block w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500">
                         </div>
                         <div>
                             <label for="arrival_time" class="block text-sm font-medium text-gray-700">Giờ đến (dự kiến)</label>
-                            <input type="datetime-local" name="arrival_time" id="arrival_time" value="<?php echo $trip_to_edit && $trip_to_edit['arrival_time'] ? esc_attr(date('Y-m-d\TH:i', strtotime($trip_to_edit['arrival_time']))) : ''; ?>" readonly required class="mt-1 block w-full border border-gray-300 rounded-lg px-3 py-2 bg-gray-100">
+                            <input type="datetime-local" name="arrival_time" id="arrival_time" readonly required class="mt-1 block w-full border border-gray-300 rounded-lg px-3 py-2 bg-gray-100">
                         </div>
                         <div>
                             <label for="price" class="block text-sm font-medium text-gray-700">Giá vé (VNĐ)</label>
-                            <input type="number" name="price" id="price" step="0.01" value="<?php echo $trip_to_edit ? esc_attr($trip_to_edit['price']) : ''; ?>" readonly required class="mt-1 block w-full border border-gray-300 rounded-lg px-3 py-2 bg-gray-100">
+                            <input type="number" name="price" id="price" step="0.01" readonly required class="mt-1 block w-full border border-gray-300 rounded-lg px-3 py-2 bg-gray-100">
                         </div>
                         <div>
                             <label for="available_seats" class="block text-sm font-medium text-gray-700">Số ghế trống</label>
-                            <input type="number" name="available_seats" id="available_seats" value="<?php echo $trip_to_edit ? esc_attr($trip_to_edit['available_seats']) : ''; ?>" required class="mt-1 block w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500">
+                            <input type="number" name="available_seats" id="available_seats" required class="mt-1 block w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500">
                         </div>
                     </div>
                     <div class="mt-6 flex space-x-4">
-                        <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition"><?php echo $trip_to_edit ? 'Cập nhật Chuyến Xe' : 'Thêm Chuyến Xe'; ?></button>
+                        <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition" id="submit-trip">Thêm Chuyến Xe</button>
                         <button type="button" class="bg-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-400 transition nhaxe-toggle-form">Hủy</button>
                     </div>
                 </form>
@@ -1052,7 +963,7 @@ function nhaxemyduyen_manage_trips() {
 
             <!-- Trips Table -->
             <div class="overflow-x-auto">
-                <table class="min-w-full bg-white border border-gray-200">
+                <table class="min-w-full bg-white border border-gray-200" id="trips-table">
                     <thead class="bg-gray-50">
                         <tr>
                             <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
@@ -1077,7 +988,7 @@ function nhaxemyduyen_manage_trips() {
                             </tr>
                         <?php else : ?>
                             <?php foreach ($trips as $trip) : ?>
-                                <tr class="hover:bg-gray-50">
+                                <tr class="hover:bg-gray-50" data-trip-id="<?php echo esc_attr($trip['trip_id']); ?>">
                                     <td class="px-4 py-3 text-sm text-gray-900"><?php echo esc_html($trip['trip_id']); ?></td>
                                     <td class="px-4 py-3 text-sm text-gray-900"><?php echo esc_html($trip['from_location']); ?></td>
                                     <td class="px-4 py-3 text-sm text-gray-900"><?php echo esc_html($trip['to_location']); ?></td>
@@ -1095,18 +1006,8 @@ function nhaxemyduyen_manage_trips() {
                                         <?php endif; ?>
                                     </td>
                                     <td class="px-4 py-3 text-sm text-gray-900">
-                                        <form method="post" action="" class="inline-block">
-                                            <?php wp_nonce_field('nhaxemyduyen_edit_trip', 'nhaxemyduyen_edit_nonce'); ?>
-                                            <input type="hidden" name="nhaxemyduyen_edit_trip" value="edit">
-                                            <input type="hidden" name="trip_id" value="<?php echo esc_attr($trip['trip_id']); ?>">
-                                            <button type="submit" class="bg-blue-600 text-white px-3 py-1 rounded-lg hover:bg-blue-700 transition mr-2 nhaxe-toggle-form">Sửa</button>
-                                        </form>
-                                        <form method="post" action="" class="inline-block">
-                                            <?php wp_nonce_field('nhaxemyduyen_delete_trip', 'nhaxemyduyen_delete_nonce'); ?>
-                                            <input type="hidden" name="nhaxemyduyen_delete_trip" value="delete">
-                                            <input type="hidden" name="trip_id" value="<?php echo esc_attr($trip['trip_id']); ?>">
-                                            <button type="submit" class="bg-red-600 text-white px-3 py-1 rounded-lg hover:bg-red-700 transition" onclick="return confirm('Bạn có chắc chắn muốn xóa?')">Xóa</button>
-                                        </form>
+                                        <button type="button" class="bg-blue-600 text-white px-3 py-1 rounded-lg hover:bg-blue-700 transition mr-2 nhaxe-toggle-form" data-action="edit" data-trip-id="<?php echo esc_attr($trip['trip_id']); ?>">Sửa</button>
+                                        <button type="button" class="bg-red-600 text-white px-3 py-1 rounded-lg hover:bg-red-700 transition nhaxe-delete-trip" data-trip-id="<?php echo esc_attr($trip['trip_id']); ?>" data-nonce="<?php echo wp_create_nonce('nhaxemyduyen_delete_trip'); ?>">Xóa</button>
                                     </td>
                                 </tr>
                             <?php endforeach; ?>
@@ -1178,6 +1079,7 @@ function nhaxemyduyen_manage_trips() {
 
     <script>
         jQuery(document).ready(function($) {
+            // Khởi tạo Datepicker
             $('#filter_departure_date').datepicker({
                 dateFormat: 'mm/dd/yy',
                 onSelect: function(dateText) {
@@ -1185,6 +1087,7 @@ function nhaxemyduyen_manage_trips() {
                 }
             });
 
+            // Xử lý thay đổi điểm đi/đến để lấy giá và thời gian
             $('#from_location_id, #to_location_id').change(function() {
                 var from_location_id = $('#from_location_id').val();
                 var to_location_id = $('#to_location_id').val();
@@ -1238,14 +1141,178 @@ function nhaxemyduyen_manage_trips() {
                 }
             });
 
+            // Trigger cập nhật giá và thời gian khi thay đổi giờ đi
             $('#departure_time').change(function() {
                 $('#from_location_id, #to_location_id').trigger('change');
             });
 
-            $('.nhaxe-toggle-form').click(function() {
-                $('.nhaxe-add-form').toggleClass('hidden');
+            // Xử lý toggle form thêm/sửa
+            $(document).on('click', '.nhaxe-toggle-form', function() {
+                var action = $(this).data('action');
+                var tripId = $(this).data('trip-id');
+
+                if (action === 'add') {
+                    // Reset form cho thêm mới
+                    $('#trip_action').val('add');
+                    $('#trip_id').val('');
+                    $('#from_location_id').val('');
+                    $('#to_location_id').val('');
+                    $('#pickup_location').val('');
+                    $('#dropoff_location').val('');
+                    $('#departure_time').val('<?php echo date('Y-m-d\TH:i'); ?>');
+                    $('#arrival_time').val('');
+                    $('#price').val('');
+                    $('#available_seats').val('');
+                    $('#driver_id').val('');
+                    $('#vehicle_id').val('');
+                    $('.nhaxe-image-preview').html('');
+                    $('#submit-trip').text('Thêm Chuyến Xe');
+                    $('.nhaxe-add-form').removeClass('hidden');
+                } else if (action === 'edit' && tripId) {
+                    // Lấy dữ liệu chuyến xe qua AJAX
+                    $.ajax({
+                        url: ajaxurl,
+                        type: 'POST',
+                        data: {
+                            action: 'nhaxemyduyen_get_trip',
+                            trip_id: tripId,
+                            nonce: '<?php echo wp_create_nonce('nhaxemyduyen_edit_trip'); ?>'
+                        },
+                        success: function(response) {
+                            if (response.success) {
+                                var trip = response.data;
+                                $('#trip_action').val('edit');
+                                $('#trip_id').val(trip.trip_id);
+                                $('#from_location_id').val(trip.from_location_id);
+                                $('#to_location_id').val(trip.to_location_id);
+                                $('#pickup_location').val(trip.pickup_location);
+                                $('#dropoff_location').val(trip.dropoff_location);
+                                $('#departure_time').val(new Date(trip.departure_time).toISOString().slice(0, 16));
+                                $('#arrival_time').val(trip.arrival_time ? new Date(trip.arrival_time).toISOString().slice(0, 16) : '');
+                                $('#price').val(trip.price);
+                                $('#available_seats').val(trip.available_seats);
+                                $('#driver_id').val(trip.driver_id || '');
+                                $('#vehicle_id').val(trip.vehicle_id || '');
+
+                                // Cập nhật hình ảnh xe
+                                var vehicleImage = $('#vehicle_id option:selected').data('image') || '';
+                                if (vehicleImage) {
+                                    $('.nhaxe-image-preview').html('<img src="' + vehicleImage + '" alt="Hình ảnh xe" class="max-w-[200px] rounded-lg">');
+                                } else {
+                                    $('.nhaxe-image-preview').html('');
+                                }
+
+                                $('#submit-trip').text('Cập nhật Chuyến Xe');
+                                $('.nhaxe-add-form').removeClass('hidden');
+                            } else {
+                                $('#nhaxe-message').html('<div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6 rounded-lg"><p>Không thể lấy dữ liệu chuyến xe.</p></div>');
+                            }
+                        },
+                        error: function() {
+                            $('#nhaxe-message').html('<div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6 rounded-lg"><p>Đã có lỗi xảy ra khi lấy dữ liệu chuyến xe.</p></div>');
+                        }
+                    });
+                } else {
+                    $('.nhaxe-add-form').addClass('hidden');
+                }
             });
 
+            // Xử lý submit form thêm/sửa chuyến xe qua AJAX
+            $('#trip-form').submit(function(e) {
+                e.preventDefault();
+                var formData = $(this).serialize();
+
+                $.ajax({
+                    url: ajaxurl,
+                    type: 'POST',
+                    data: formData + '&action=nhaxemyduyen_manage_trip',
+                    success: function(response) {
+                        if (response.success) {
+                            $('#nhaxe-message').html('<div class="bg-green-100 border-l-4 border-green-500 text-green-700 p-4 mb-6 rounded-lg"><p>' + response.data.message + '</p></div>');
+                            $('.nhaxe-add-form').addClass('hidden');
+                            refreshTripsTable();
+                        } else {
+                            $('#nhaxe-message').html('<div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6 rounded-lg"><p>' + response.data.message + '</p></div>');
+                        }
+                    },
+                    error: function() {
+                        $('#nhaxe-message').html('<div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6 rounded-lg"><p>Đã có lỗi xảy ra. Vui lòng thử lại.</p></div>');
+                    }
+                });
+            });
+
+            // Xử lý xóa chuyến xe qua AJAX
+            $(document).on('click', '.nhaxe-delete-trip', function() {
+                if (!confirm('Bạn có chắc chắn muốn xóa?')) return;
+
+                var tripId = $(this).data('trip-id');
+                var nonce = $(this).data('nonce');
+
+                $.ajax({
+                    url: ajaxurl,
+                    type: 'POST',
+                    data: {
+                        action: 'nhaxemyduyen_delete_trip',
+                        trip_id: tripId,
+                        nhaxemyduyen_delete_nonce: nonce
+                    },
+                    success: function(response) {
+                        if (response.success) {
+                            $('#nhaxe-message').html('<div class="bg-green-100 border-l-4 border-green-500 text-green-700 p-4 mb-6 rounded-lg"><p>Xóa chuyến xe thành công!</p></div>');
+                            refreshTripsTable();
+                        } else {
+                            $('#nhaxe-message').html('<div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6 rounded-lg"><p>' + response.data.message + '</p></div>');
+                        }
+                    },
+                    error: function() {
+                        $('#nhaxe-message').html('<div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6 rounded-lg"><p>Đã có lỗi xảy ra khi xóa chuyến xe.</p></div>');
+                    }
+                });
+            });
+
+            // Xử lý lọc danh sách chuyến xe qua AJAX
+            $('#filter-form').submit(function(e) {
+                e.preventDefault();
+                var formData = $(this).serialize();
+
+                $.ajax({
+                    url: ajaxurl,
+                    type: 'POST',
+                    data: formData + '&action=nhaxemyduyen_filter_trips',
+                    success: function(response) {
+                        if (response.success) {
+                            $('#trips-table tbody').html(response.data.html);
+                        } else {
+                            $('#nhaxe-message').html('<div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6 rounded-lg"><p>Lỗi khi lọc chuyến xe.</p></div>');
+                        }
+                    },
+                    error: function() {
+                        $('#nhaxe-message').html('<div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6 rounded-lg"><p>Đã có lỗi xảy ra khi lọc chuyến xe.</p></div>');
+                    }
+                });
+            });
+
+            // Hàm làm mới bảng chuyến xe
+            function refreshTripsTable() {
+                var formData = $('#filter-form').serialize();
+                $.ajax({
+                    url: ajaxurl,
+                    type: 'POST',
+                    data: formData + '&action=nhaxemyduyen_filter_trips',
+                    success: function(response) {
+                        if (response.success) {
+                            $('#trips-table tbody').html(response.data.html);
+                        } else {
+                            $('#nhaxe-message').html('<div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6 rounded-lg"><p>Lỗi khi làm mới danh sách chuyến xe.</p></div>');
+                        }
+                    },
+                    error: function() {
+                        $('#nhaxe-message').html('<div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6 rounded-lg"><p>Đã có lỗi xảy ra khi làm mới danh sách chuyến xe.</p></div>');
+                    }
+                });
+            }
+
+            // Cập nhật số ghế trống và hình ảnh xe khi chọn phương tiện
             window.updateAvailableSeats = function(element) {
                 var selectedOption = $(element).find('option:selected');
                 var capacity = selectedOption.data('capacity') || 0;
@@ -1260,6 +1327,197 @@ function nhaxemyduyen_manage_trips() {
         });
     </script>
     <?php
+}
+
+// Xử lý AJAX lấy dữ liệu chuyến xe
+add_action('wp_ajax_nhaxemyduyen_get_trip', 'nhaxemyduyen_get_trip_callback');
+function nhaxemyduyen_get_trip_callback() {
+    check_ajax_referer('nhaxemyduyen_edit_trip', 'nonce');
+
+    global $wpdb;
+    $table_trips = $wpdb->prefix . 'trips';
+    $trip_id = intval($_POST['trip_id']);
+
+    $trip = $wpdb->get_row($wpdb->prepare("SELECT * FROM $table_trips WHERE trip_id = %d", $trip_id), ARRAY_A);
+
+    if ($trip) {
+        wp_send_json_success($trip);
+    } else {
+        wp_send_json_error();
+    }
+}
+
+// Xử lý AJAX thêm/sửa chuyến xe
+add_action('wp_ajax_nhaxemyduyen_manage_trip', 'nhaxemyduyen_manage_trip_callback');
+function nhaxemyduyen_manage_trip_callback() {
+    global $wpdb;
+    $table_trips = $wpdb->prefix . 'trips';
+
+    check_ajax_referer('nhaxemyduyen_trip_action', 'nhaxemyduyen_trip_nonce');
+
+    $action = isset($_POST['nhaxemyduyen_trip_action']) ? sanitize_text_field($_POST['nhaxemyduyen_trip_action']) : '';
+
+    if (
+        empty($_POST['from_location_id']) ||
+        empty($_POST['to_location_id']) ||
+        empty($_POST['pickup_location']) ||
+        empty($_POST['dropoff_location']) ||
+        empty($_POST['departure_time']) ||
+        empty($_POST['arrival_time']) ||
+        empty($_POST['price']) ||
+        empty($_POST['available_seats'])
+    ) {
+        wp_send_json_error(array('message' => 'Lỗi: Vui lòng điền đầy đủ các trường bắt buộc!'));
+    }
+
+    $trip_data = array(
+        'from_location_id' => intval($_POST['from_location_id']),
+        'to_location_id' => intval($_POST['to_location_id']),
+        'pickup_location' => sanitize_text_field($_POST['pickup_location']),
+        'dropoff_location' => sanitize_text_field($_POST['dropoff_location']),
+        'departure_time' => date('Y-m-d H:i:s', strtotime($_POST['departure_time'])),
+        'arrival_time' => date('Y-m-d H:i:s', strtotime($_POST['arrival_time'])),
+        'price' => floatval($_POST['price']),
+        'available_seats' => intval($_POST['available_seats']),
+        'driver_id' => !empty($_POST['driver_id']) ? intval($_POST['driver_id']) : null,
+        'vehicle_id' => !empty($_POST['vehicle_id']) ? intval($_POST['vehicle_id']) : null,
+    );
+
+    $current_time = current_time('mysql');
+
+    if ($action === 'add') {
+        $trip_data['created_at'] = $current_time;
+        $trip_data['updated_at'] = $current_time;
+
+        $result = $wpdb->insert($table_trips, $trip_data);
+        if ($result === false) {
+            wp_send_json_error(array('message' => 'Lỗi: Không thể thêm chuyến xe. ' . esc_html($wpdb->last_error)));
+        } else {
+            wp_send_json_success(array('message' => 'Thêm chuyến xe thành công!'));
+        }
+    } elseif ($action === 'edit') {
+        $trip_id = intval($_POST['trip_id']);
+        $trip_data['updated_at'] = $current_time;
+
+        $result = $wpdb->update($table_trips, $trip_data, array('trip_id' => $trip_id));
+        if ($result === false) {
+            wp_send_json_error(array('message' => 'Lỗi: Không thể cập nhật chuyến xe. ' . esc_html($wpdb->last_error)));
+        } else {
+            wp_send_json_success(array('message' => 'Cập nhật chuyến xe thành công!'));
+        }
+    } else {
+        wp_send_json_error(array('message' => 'Hành động không hợp lệ.'));
+    }
+}
+
+// Xử lý AJAX xóa chuyến xe
+add_action('wp_ajax_nhaxemyduyen_delete_trip', 'nhaxemyduyen_delete_trip_callback');
+function nhaxemyduyen_delete_trip_callback() {
+    global $wpdb;
+    $table_trips = $wpdb->prefix . 'trips';
+    $table_tickets = $wpdb->prefix . 'tickets';
+
+    check_ajax_referer('nhaxemyduyen_delete_trip', 'nhaxemyduyen_delete_nonce');
+
+    $trip_id = intval($_POST['trip_id']);
+    $ticket_count = $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $table_tickets WHERE trip_id = %d", $trip_id));
+
+    if ($ticket_count > 0) {
+        wp_send_json_error(array('message' => 'Không thể xóa chuyến xe vì đã có vé được đặt!'));
+    }
+
+    $result = $wpdb->delete($table_trips, array('trip_id' => $trip_id));
+    if ($result === false) {
+        wp_send_json_error(array('message' => 'Lỗi: Không thể xóa chuyến xe. ' . esc_html($wpdb->last_error)));
+    }
+
+    wp_send_json_success();
+}
+
+// Xử lý AJAX lọc chuyến xe
+add_action('wp_ajax_nhaxemyduyen_filter_trips', 'nhaxemyduyen_filter_trips_callback');
+function nhaxemyduyen_filter_trips_callback() {
+    global $wpdb;
+    $table_trips = $wpdb->prefix . 'trips';
+    $table_locations = $wpdb->prefix . 'locations';
+    $table_drivers = $wpdb->prefix . 'drivers';
+    $table_vehicles = $wpdb->prefix . 'vehicles';
+
+    $filter_from_location = isset($_POST['filter_from_location']) ? intval($_POST['filter_from_location']) : 0;
+    $filter_to_location = isset($_POST['filter_to_location']) ? intval($_POST['filter_to_location']) : 0;
+    $filter_departure_date = isset($_POST['filter_departure_date']) ? sanitize_text_field($_POST['filter_departure_date']) : '';
+
+    if (!empty($filter_departure_date)) {
+        $date = DateTime::createFromFormat('m/d/Y', $filter_departure_date);
+        if ($date) {
+            $filter_departure_date = $date->format('Y-m-d');
+        } else {
+            $filter_departure_date = '';
+        }
+    }
+
+    $where_conditions = [];
+    if ($filter_from_location > 0) {
+        $where_conditions[] = $wpdb->prepare("t.from_location_id = %d", $filter_from_location);
+    }
+    if ($filter_to_location > 0) {
+        $where_conditions[] = $wpdb->prepare("t.to_location_id = %d", $filter_to_location);
+    }
+    if (!empty($filter_departure_date)) {
+        $where_conditions[] = $wpdb->prepare("DATE(t.departure_time) = %s", $filter_departure_date);
+    } else {
+        $where_conditions[] = "DATE(t.departure_time) = CURDATE()";
+    }
+
+    $where_clause = '';
+    if (!empty($where_conditions)) {
+        $where_clause = " WHERE " . implode(' AND ', $where_conditions);
+    }
+
+    $trips = $wpdb->get_results("
+        SELECT t.*, l1.name as from_location, l2.name as to_location, d.name as driver_name, v.license_plate as vehicle_plate, v.image as bus_image
+        FROM $table_trips t
+        JOIN $table_locations l1 ON t.from_location_id = l1.location_id
+        JOIN $table_locations l2 ON t.to_location_id = l2.location_id
+        LEFT JOIN $table_drivers d ON t.driver_id = d.driver_id
+        LEFT JOIN $table_vehicles v ON t.vehicle_id = v.vehicle_id
+        $where_clause
+        ORDER BY t.departure_time DESC
+    ", ARRAY_A);
+
+    ob_start();
+    if (empty($trips)) {
+        echo '<tr><td colspan="13" class="px-4 py-3 text-sm text-gray-500 text-center">Không có chuyến xe nào phù hợp với tiêu chí.</td></tr>';
+    } else {
+        foreach ($trips as $trip) {
+            ?>
+            <tr class="hover:bg-gray-50" data-trip-id="<?php echo esc_attr($trip['trip_id']); ?>">
+                <td class="px-4 py-3 text-sm text-gray-900"><?php echo esc_html($trip['trip_id']); ?></td>
+                <td class="px-4 py-3 text-sm text-gray-900"><?php echo esc_html($trip['from_location']); ?></td>
+                <td class="px-4 py-3 text-sm text-gray-900"><?php echo esc_html($trip['to_location']); ?></td>
+                <td class="px-4 py-3 text-sm text-gray-900"><?php echo esc_html($trip['pickup_location']); ?></td>
+                <td class="px-4 py-3 text-sm text-gray-900"><?php echo esc_html($trip['dropoff_location']); ?></td>
+                <td class="px-4 py-3 text-sm text-gray-900"><?php echo $trip['driver_name'] ? esc_html($trip['driver_name']) : 'Chưa chọn'; ?></td>
+                <td class="px-4 py-3 text-sm text-gray-900"><?php echo $trip['vehicle_plate'] ? esc_html($trip['vehicle_plate']) : 'Chưa chọn'; ?></td>
+                <td class="px-4 py-3 text-sm text-gray-900"><?php echo esc_html(date('m/d/Y H:i', strtotime($trip['departure_time']))); ?></td>
+                <td class="px-4 py-3 text-sm text-gray-900"><?php echo $trip['arrival_time'] ? esc_html(date('m/d/Y H:i', strtotime($trip['arrival_time']))) : 'Chưa có'; ?></td>
+                <td class="px-4 py-3 text-sm text-gray-900"><?php echo esc_html(number_format($trip['price'], 0, ',', '.')); ?></td>
+                <td class="px-4 py-3 text-sm text-gray-900"><?php echo esc_html($trip['available_seats']); ?></td>
+                <td class="px-4 py-3 text-sm text-gray-900">
+                    <?php if ($trip['bus_image']) : ?>
+                        <img src="<?php echo esc_url($trip['bus_image']); ?>" alt="Hình ảnh xe" class="max-w-[100px] rounded-lg" />
+                    <?php endif; ?>
+                </td>
+                <td class="px-4 py-3 text-sm text-gray-900">
+                    <button type="button" class="bg-blue-600 text-white px-3 py-1 rounded-lg hover:bg-blue-700 transition mr-2 nhaxe-toggle-form" data-action="edit" data-trip-id="<?php echo esc_attr($trip['trip_id']); ?>">Sửa</button>
+                    <button type="button" class="bg-red-600 text-white px-3 py-1 rounded-lg hover:bg-red-700 transition nhaxe-delete-trip" data-trip-id="<?php echo esc_attr($trip['trip_id']); ?>" data-nonce="<?php echo wp_create_nonce('nhaxemyduyen_delete_trip'); ?>">Xóa</button>
+                </td>
+            </tr>
+            <?php
+        }
+    }
+    $html = ob_get_clean();
+    wp_send_json_success(array('html' => $html));
 }
 
 // Xử lý AJAX để lấy thông tin tuyến đường
