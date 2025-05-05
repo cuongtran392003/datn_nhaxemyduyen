@@ -4,8 +4,8 @@ import {
   Route,
   useLocation,
 } from "react-router-dom";
-import Header from "./components/Header";
-import Footer from "./components/Footer";
+import Header from "./components/Layout/Header";
+import Footer from "./components/Layout/Footer";
 import Home from "./components/pages/Home";
 import About from "./components/pages/About";
 import Services from "./components/pages/Services";
@@ -23,7 +23,8 @@ import ForgotPassword from "./components/Account/ForgotPassword";
 import ResetPassword from "./components/Account/ResetPassword";
 import ScrollToTop from "./components/ScrollToTop";
 import PaymentStatus from "./components/PaymentStatus";
-import CSKH from "./components/CSKH";
+import CSKH from "./components/Shared/CSKH";
+import NewsDetail from "./components/News/NewsDetail";
 
 
 
@@ -47,6 +48,14 @@ function Layout() {
           <Route path="/news" element={<News />} />
           <Route path="/contact" element={<Contact />} />
           <Route path="/careers" element={<Careers />} />
+          <Route
+            path="/news/:postId"
+            element={
+              <PrivateRoute>
+                <NewsDetail />
+              </PrivateRoute>
+            }
+          />
           <Route
             path="/search"
             element={

@@ -740,7 +740,7 @@ function nhaxemyduyen_manage_routes() {
 }
 
 
-// Trang quản lý chuyến xe
+
 // Trang quản lý chuyến xe
 function nhaxemyduyen_manage_trips() {
     global $wpdb;
@@ -947,7 +947,7 @@ function nhaxemyduyen_manage_trips() {
                         </div>
                         <div>
                             <label for="price" class="block text-sm font-medium text-gray-700">Giá vé (VNĐ)</label>
-                            <input type="number" name="price" id="price" step="0.01" readonly required class="mt-1 block w-full border border-gray-300 rounded-lg px-3 py-2 bg-gray-100">
+                            <input type="number" name="price" id="price" step="0.01" required class="mt-1 block w-full border border-gray-300 rounded-lg px-3 py-2 bg-gray-100">
                         </div>
                         <div>
                             <label for="available_seats" class="block text-sm font-medium text-gray-700">Số ghế trống</label>
@@ -1564,94 +1564,105 @@ function nhaxemyduyen_manage_tickets() {
     wp_enqueue_style('jquery-ui-css', '//code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css');
     wp_enqueue_style('tailwind-css', 'https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css');
 
-    // Xử lý thêm vé
-    $add_error = '';
-    $add_success = '';
-    if (isset($_POST['nhaxemyduyen_add_ticket']) && check_admin_referer('nhaxemyduyen_ticket_action', 'nhaxemyduyen_ticket_nonce')) {
-        $data = array(
-            'trip_id' => intval($_POST['trip_id']),
-            'customer_name' => sanitize_text_field($_POST['customer_name']),
-            'customer_phone' => sanitize_text_field($_POST['customer_phone']),
-            'customer_email' => sanitize_email($_POST['customer_email'] ?? ''),
-            'pickup_location' => sanitize_text_field($_POST['pickup_location']),
-            'dropoff_location' => sanitize_text_field($_POST['dropoff_location']),
-            'seat_number' => sanitize_text_field($_POST['seat_number']),
-            'status' => sanitize_text_field($_POST['status']),
-            'note' => sanitize_text_field($_POST['note'] ?? ''),
-        );
+    // Xử lý AJAX
+    if (isset($_POST['nhaxemyduyen_action'])) {
+        header('Content-Type: application/json');
 
-        // Validate required fields
-        $required_fields = ['trip_id', 'customer_name', 'customer_phone', 'pickup_location', 'dropoff_location', 'seat_number', 'status'];
-        $missing_fields = array_filter($required_fields, fn($field) => empty($data[$field]));
-        if (!empty($missing_fields)) {
-            $add_error = 'Vui lòng nhập đầy đủ các trường bắt buộc: ' . implode(', ', $missing_fields);
-        } elseif (!preg_match('/^[0-9]{10,11}$/', $data['customer_phone'])) {
-            $add_error = 'Số điện thoại phải có 10-11 chữ số.';
-        } elseif (!preg_match('/^A[1-9][0-9]?$/', $data['seat_number']) || intval(substr($data['seat_number'], 1)) > 44) {
-            $add_error = 'Số ghế không hợp lệ (phải là A1-A44).';
-        } else {
-            // Gửi yêu cầu tới API
-            $response = wp_remote_post(rest_url('nhaxemyduyen/v1/tickets'), array(
-                'method' => 'POST',
-                'body' => json_encode($data),
-                'headers' => array(
-                    'Content-Type' => 'application/json',
-                ),
-            ));
+        // Xử lý thêm vé
+        if ($_POST['nhaxemyduyen_action'] === 'add_ticket' && check_admin_referer('nhaxemyduyen_ticket_action', 'nhaxemyduyen_ticket_nonce')) {
+            $data = array(
+                'trip_id' => intval($_POST['trip_id']),
+                'customer_name' => sanitize_text_field($_POST['customer_name']),
+                'customer_phone' => sanitize_text_field($_POST['customer_phone']),
+                'customer_email' => sanitize_email($_POST['customer_email'] ?? ''),
+                'pickup_location' => sanitize_text_field($_POST['pickup_location']),
+                'dropoff_location' => sanitize_text_field($_POST['dropoff_location']),
+                'seat_number' => sanitize_text_field($_POST['seat_number']),
+                'status' => sanitize_text_field($_POST['status']),
+                'note' => sanitize_text_field($_POST['note'] ?? ''),
+            );
 
-            if (is_wp_error($response)) {
-                $add_error = 'Lỗi khi thêm vé: ' . $response->get_error_message();
+            // Validate required fields
+            $required_fields = ['trip_id', 'customer_name', 'customer_phone', 'pickup_location', 'dropoff_location', 'seat_number', 'status'];
+            $missing_fields = array_filter($required_fields, fn($field) => empty($data[$field]));
+            if (!empty($missing_fields)) {
+                wp_send_json_error(['message' => 'Vui lòng nhập đầy đủ các trường bắt buộc: ' . implode(', ', $missing_fields)]);
+            } elseif (!preg_match('/^[0-9]{10,11}$/', $data['customer_phone'])) {
+                wp_send_json_error(['message' => 'Số điện thoại phải có 10-11 chữ số.']);
+            } elseif (!preg_match('/^A[1-9][0-9]?$/', $data['seat_number']) || intval(substr($data['seat_number'], 1)) > 44) {
+                wp_send_json_error(['message' => 'Số ghế không hợp lệ (phải là A1-A44).']);
             } else {
-                $response_body = json_decode(wp_remote_retrieve_body($response), true);
-                if (wp_remote_retrieve_response_code($response) === 201) {
-                    $add_success = 'Vé xe đã được thêm thành công. Mã vé: ' . $response_body['ticket_code'];
+                // Gửi yêu cầu tới API
+                $response = wp_remote_post(rest_url('nhaxemyduyen/v1/tickets'), array(
+                    'method' => 'POST',
+                    'body' => json_encode($data),
+                    'headers' => array(
+                        'Content-Type' => 'application/json',
+                    ),
+                ));
+
+                if (is_wp_error($response)) {
+                    wp_send_json_error(['message' => 'Lỗi khi thêm vé: ' . $response->get_error_message()]);
                 } else {
-                    $add_error = $response_body['message'] ?? 'Lỗi không xác định khi thêm vé.';
+                    $response_body = json_decode(wp_remote_retrieve_body($response), true);
+                    if (wp_remote_retrieve_response_code($response) === 201) {
+                        wp_send_json_success(['message' => 'Vé xe đã được thêm thành công. Mã vé: ' . $response_body['ticket_code'], 'ticket' => $response_body]);
+                    } else {
+                        wp_send_json_error(['message' => $response_body['message'] ?? 'Lỗi không xác định khi thêm vé.']);
+                    }
                 }
             }
         }
-    }
 
-    // Xử lý cập nhật trạng thái
-    if (isset($_POST['nhaxemyduyen_ticket_action']) && $_POST['nhaxemyduyen_ticket_action'] === 'update' && check_admin_referer('nhaxemyduyen_ticket_nonce')) {
-        $ticket_id = intval($_POST['ticket_id']);
-        $status = sanitize_text_field($_POST['status']);
-        $valid_statuses = ['Đã thanh toán', 'Chưa thanh toán', 'Đã hủy'];
-        
-        if (in_array($status, $valid_statuses)) {
+        // Xử lý cập nhật trạng thái
+        if ($_POST['nhaxemyduyen_action'] === 'update_status' && check_admin_referer('nhaxemyduyen_ticket_nonce')) {
+            $ticket_id = intval($_POST['ticket_id']);
+            $status = sanitize_text_field($_POST['status']);
+            $valid_statuses = ['Đã thanh toán', 'Chưa thanh toán', 'Đã hủy'];
+
+            if (!in_array($status, $valid_statuses)) {
+                wp_send_json_error(['message' => 'Trạng thái không hợp lệ.']);
+            }
+
             $result = $wpdb->update(
                 $table_tickets,
                 array('status' => $status, 'updated_at' => current_time('mysql')),
                 array('ticket_id' => $ticket_id)
             );
-            if ($result === false) {
-                echo '<div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-4"><p>Lỗi khi cập nhật trạng thái vé: ' . $wpdb->last_error . '</p></div>';
-            } else {
-                echo '<div class="bg-green-100 border-l-4 border-green-500 text-green-700 p-4 mb-4"><p>Trạng thái vé đã được cập nhật.</p></div>';
-            }
-        }
-    }
 
-    // Xử lý xóa vé
-    if (isset($_POST['nhaxemyduyen_ticket_action']) && $_POST['nhaxemyduyen_ticket_action'] === 'delete' && check_admin_referer('nhaxemyduyen_delete_ticket', 'nhaxemyduyen_delete_nonce')) {
-        $ticket_id = intval($_POST['ticket_id']);
-        $ticket = $wpdb->get_row($wpdb->prepare("SELECT trip_id FROM $table_tickets WHERE ticket_id = %d", $ticket_id));
-        if ($ticket) {
-            $result = $wpdb->delete($table_tickets, array('ticket_id' => $ticket_id));
-            if ($result !== false) {
-                $trip = $wpdb->get_row($wpdb->prepare("SELECT available_seats FROM $table_trips WHERE trip_id = %d", $ticket->trip_id));
-                if ($trip) {
-                    $wpdb->update(
-                        $table_trips,
-                        array('available_seats' => $trip->available_seats + 1),
-                        array('trip_id' => $ticket->trip_id)
-                    );
-                }
-                echo '<div class="bg-green-100 border-l-4 border-green-500 text-green-700 p-4 mb-4"><p>Vé xe đã được xóa.</p></div>';
+            if ($result === false) {
+                wp_send_json_error(['message' => 'Lỗi khi cập nhật trạng thái vé: ' . $wpdb->last_error]);
             } else {
-                echo '<div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-4"><p>Lỗi khi xóa vé: ' . $wpdb->last_error . '</p></div>';
+                wp_send_json_success(['message' => 'Trạng thái vé đã được cập nhật.', 'ticket_id' => $ticket_id, 'status' => $status]);
             }
         }
+
+        // Xử lý xóa vé
+        if ($_POST['nhaxemyduyen_action'] === 'delete_ticket' && check_admin_referer('nhaxemyduyen_delete_ticket', 'nhaxemyduyen_delete_nonce')) {
+            $ticket_id = intval($_POST['ticket_id']);
+            $ticket = $wpdb->get_row($wpdb->prepare("SELECT trip_id FROM $table_tickets WHERE ticket_id = %d", $ticket_id));
+            if (!$ticket) {
+                wp_send_json_error(['message' => 'Vé không tồn tại.']);
+            }
+
+            $result = $wpdb->delete($table_tickets, array('ticket_id' => $ticket_id));
+            if ($result === false) {
+                wp_send_json_error(['message' => 'Lỗi khi xóa vé: ' . $wpdb->last_error]);
+            }
+
+            $trip = $wpdb->get_row($wpdb->prepare("SELECT available_seats FROM $table_trips WHERE trip_id = %d", $ticket->trip_id));
+            if ($trip) {
+                $wpdb->update(
+                    $table_trips,
+                    array('available_seats' => $trip->available_seats + 1),
+                    array('trip_id' => $ticket->trip_id)
+                );
+            }
+
+            wp_send_json_success(['message' => 'Vé xe đã được xóa.', 'ticket_id' => $ticket_id]);
+        }
+
+        wp_send_json_error(['message' => 'Hành động không hợp lệ.']);
     }
 
     // Lấy danh sách địa điểm, tài xế và phương tiện
@@ -1662,14 +1673,6 @@ function nhaxemyduyen_manage_tickets() {
     // Lấy danh sách điểm đón và trả từ bảng trips
     $pickup_locations = $wpdb->get_col("SELECT DISTINCT pickup_location FROM $table_trips WHERE pickup_location != '' ORDER BY pickup_location");
     $dropoff_locations = $wpdb->get_col("SELECT DISTINCT dropoff_location FROM $table_trips WHERE dropoff_location != '' ORDER BY dropoff_location");
-
-    // Cảnh báo nếu không có điểm đón hoặc trả
-    if (empty($pickup_locations)) {
-        echo '<div class="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mb-4"><p>Cảnh báo: Không có điểm đón nào trong wp_trips!</p></div>';
-    }
-    if (empty($dropoff_locations)) {
-        echo '<div class="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mb-4"><p>Cảnh báo: Không có điểm trả nào trong wp_trips!</p></div>';
-    }
 
     // Bộ lọc
     $filter_customer_phone = isset($_POST['filter_customer_phone']) ? sanitize_text_field($_POST['filter_customer_phone']) : '';
@@ -1756,22 +1759,20 @@ function nhaxemyduyen_manage_tickets() {
     <div class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
         <h1 class="text-3xl font-bold text-gray-900 mb-6">Quản lý Vé Xe</h1>
 
-        <?php if ($add_success) : ?>
-            <div class="bg-green-100 border-l-4 border-green-500 text-green-700 p-4 mb-6 rounded-lg">
-                <p><?php echo esc_html($add_success); ?></p>
-            </div>
+        <div id="nhaxe-messages" class="mb-6"></div>
+
+        <?php if (empty($pickup_locations)) : ?>
+            <div class="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mb-4"><p>Cảnh báo: Không có điểm đón nào trong wp_trips!</p></div>
         <?php endif; ?>
-        <?php if ($add_error) : ?>
-            <div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6 rounded-lg">
-                <p><?php echo esc_html($add_error); ?></p>
-            </div>
+        <?php if (empty($dropoff_locations)) : ?>
+            <div class="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mb-4"><p>Cảnh báo: Không có điểm trả nào trong wp_trips!</p></div>
         <?php endif; ?>
 
         <div class="bg-white shadow-lg rounded-lg p-6">
             <h2 class="text-2xl font-semibold text-gray-800 mb-4">Danh sách Vé Xe</h2>
 
             <!-- Filter Form -->
-            <form method="post" action="" class="mb-6">
+            <form id="nhaxe-filter-form" method="post" action="" class="mb-6">
                 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     <input type="text" name="filter_customer_phone" id="filter_customer_phone" value="<?php echo esc_attr($filter_customer_phone); ?>" placeholder="Số điện thoại khách hàng" class="border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500">
                     <select name="filter_status" id="filter_status" class="border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500">
@@ -1838,8 +1839,8 @@ function nhaxemyduyen_manage_tickets() {
 
             <!-- Add Ticket Form -->
             <div class="nhaxe-add-form hidden bg-gray-50 p-6 rounded-lg mb-6">
-                <form method="post" action="">
-                    <input type="hidden" name="nhaxemyduyen_add_ticket" value="1">
+                <form id="nhaxe-add-ticket-form" method="post" action="">
+                    <input type="hidden" name="nhaxemyduyen_action" value="add_ticket">
                     <?php wp_nonce_field('nhaxemyduyen_ticket_action', 'nhaxemyduyen_ticket_nonce'); ?>
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
@@ -1930,7 +1931,7 @@ function nhaxemyduyen_manage_tickets() {
 
             <!-- Ticket Table -->
             <div class="overflow-x-auto">
-                <table class="min-w-full bg-white border border-gray-200">
+                <table id="nhaxe-ticket-table" class="min-w-full bg-white border border-gray-200">
                     <thead class="bg-gray-50">
                         <tr>
                             <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Mã vé</th>
@@ -1950,9 +1951,9 @@ function nhaxemyduyen_manage_tickets() {
                             <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Hành động</th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-gray-200">
+                    <tbody id="nhaxe-ticket-table-body" class="divide-y divide-gray-200">
                         <?php foreach ($tickets as $ticket) : ?>
-                            <tr class="hover:bg-gray-50">
+                            <tr class="hover:bg-gray-50" data-ticket-id="<?php echo esc_attr($ticket['ticket_id']); ?>">
                                 <td class="px-4 py-3 text-sm text-gray-900"><?php echo esc_html($ticket['ticket_code']); ?></td>
                                 <td class="px-4 py-3 text-sm text-gray-900"><?php echo esc_html($ticket['customer_name']); ?></td>
                                 <td class="px-4 py-3 text-sm text-gray-900"><?php echo esc_html($ticket['customer_phone']); ?></td>
@@ -1966,25 +1967,15 @@ function nhaxemyduyen_manage_tickets() {
                                 <td class="px-4 py-3 text-sm text-gray-900"><?php echo esc_html(date('m/d/Y H:i', strtotime($ticket['departure_time']))); ?></td>
                                 <td class="px-4 py-3 text-sm text-gray-900"><?php echo esc_html($ticket['seat_number']); ?></td>
                                 <td class="px-4 py-3 text-sm text-gray-900">
-                                    <form method="post" action="">
-                                        <input type="hidden" name="nhaxemyduyen_ticket_action" value="update">
-                                        <input type="hidden" name="ticket_id" value="<?php echo esc_attr($ticket['ticket_id']); ?>">
-                                        <input type="hidden" name="nhaxemyduyen_ticket_nonce" value="<?php echo wp_create_nonce('nhaxemyduyen_ticket_nonce'); ?>">
-                                        <select name="status" class="border border-gray-300 rounded-lg px-2 py-1 focus:ring-2 focus:ring-blue-500" onchange="this.form.submit()">
-                                            <option value="Đã thanh toán" <?php selected($ticket['status'], 'Đã thanh toán'); ?>>Đã thanh toán</option>
-                                            <option value="Chưa thanh toán" <?php selected($ticket['status'], 'Chưa thanh toán'); ?>>Chưa thanh toán</option>
-                                            <option value="Đã hủy" <?php selected($ticket['status'], 'Đã hủy'); ?>>Đã hủy</option>
-                                        </select>
-                                    </form>
+                                    <select class="nhaxe-status-select border border-gray-300 rounded-lg px-2 py-1 focus:ring-2 focus:ring-blue-500" data-ticket-id="<?php echo esc_attr($ticket['ticket_id']); ?>">
+                                        <option value="Đã thanh toán" <?php selected($ticket['status'], 'Đã thanh toán'); ?>>Đã thanh toán</option>
+                                        <option value="Chưa thanh toán" <?php selected($ticket['status'], 'Chưa thanh toán'); ?>>Chưa thanh toán</option>
+                                        <option value="Đã hủy" <?php selected($ticket['status'], 'Đã hủy'); ?>>Đã hủy</option>
+                                    </select>
                                 </td>
                                 <td class="px-4 py-3 text-sm text-gray-900"><?php echo esc_html($ticket['note']); ?></td>
                                 <td class="px-4 py-3 text-sm text-gray-900">
-                                    <form method="post" action="" onsubmit="return confirm('Bạn có chắc chắn muốn xóa vé này?');">
-                                        <input type="hidden" name="nhaxemyduyen_ticket_action" value="delete">
-                                        <input type="hidden" name="ticket_id" value="<?php echo esc_attr($ticket['ticket_id']); ?>">
-                                        <input type="hidden" name="nhaxemyduyen_delete_nonce" value="<?php echo wp_create_nonce('nhaxemyduyen_delete_ticket'); ?>">
-                                        <button type="submit" class="bg-red-600 text-white px-3 py-1 rounded-lg hover:bg-red-700 transition">Xóa</button>
-                                    </form>
+                                    <button class="nhaxe-delete-ticket bg-red-600 text-white px-3 py-1 rounded-lg hover:bg-red-700 transition" data-ticket-id="<?php echo esc_attr($ticket['ticket_id']); ?>" data-nonce="<?php echo wp_create_nonce('nhaxemyduyen_delete_ticket'); ?>">Xóa</button>
                                 </td>
                             </tr>
                         <?php endforeach; ?>
@@ -2024,6 +2015,7 @@ function nhaxemyduyen_manage_tickets() {
 
     <script>
         jQuery(document).ready(function($) {
+            // Khởi tạo datepicker
             $('#filter_departure_date').datepicker({
                 dateFormat: 'mm/dd/yy',
                 minDate: 0,
@@ -2032,6 +2024,7 @@ function nhaxemyduyen_manage_tickets() {
                 }
             });
 
+            // Toggle form thêm vé
             $('.nhaxe-toggle-form').click(function() {
                 $('.nhaxe-add-form').toggleClass('hidden');
             });
@@ -2055,10 +2048,287 @@ function nhaxemyduyen_manage_tickets() {
                     $('#trip_image').html('');
                 }
             };
+
+            // Hiển thị thông báo
+            function showMessage(message, type) {
+                const messageHtml = `<div class="bg-${type}-100 border-l-4 border-${type}-500 text-${type}-700 p-4 mb-6 rounded-lg"><p>${message}</p></div>`;
+                $('#nhaxe-messages').html(messageHtml);
+                setTimeout(() => $('#nhaxe-messages').html(''), 5000);
+            }
+
+            // Xử lý thêm vé qua AJAX
+            $('#nhaxe-add-ticket-form').submit(function(e) {
+                e.preventDefault();
+                const formData = new FormData(this);
+                formData.append('action', 'nhaxemyduyen_manage_tickets');
+
+                $.ajax({
+                    url: '<?php echo admin_url('admin-ajax.php'); ?>',
+                    type: 'POST',
+                    data: formData,
+                    processData: false,
+                    contentType: false,
+                    success: function(response) {
+                        if (response.success) {
+                            showMessage(response.data.message, 'green');
+                            // Thêm vé mới vào bảng (giả sử API trả về dữ liệu vé đầy đủ)
+                            const ticket = response.data.ticket;
+                            const rowHtml = `
+                                <tr class="hover:bg-gray-50" data-ticket-id="${ticket.ticket_id}">
+                                    <td class="px-4 py-3 text-sm text-gray-900">${ticket.ticket_code}</td>
+                                    <td class="px-4 py-3 text-sm text-gray-900">${ticket.customer_name}</td>
+                                    <td class="px-4 py-3 text-sm text-gray-900">${ticket.customer_phone}</td>
+                                    <td class="px-4 py-3 text-sm text-gray-900">${ticket.customer_email || ''}</td>
+                                    <td class="px-4 py-3 text-sm text-gray-900">${ticket.from_location}</td>
+                                    <td class="px-4 py-3 text-sm text-gray-900">${ticket.to_location}</td>
+                                    <td class="px-4 py-3 text-sm text-gray-900">${ticket.pickup_location}</td>
+                                    <td class="px-4 py-3 text-sm text-gray-900">${ticket.dropoff_location}</td>
+                                    <td class="px-4 py-3 text-sm text-gray-900">${ticket.driver_name || 'Chưa chọn'}</td>
+                                    <td class="px-4 py-3 text-sm text-gray-900">${ticket.vehicle_plate || 'Chưa chọn'}</td>
+                                    <td class="px-4 py-3 text-sm text-gray-900">${new Date(ticket.departure_time).toLocaleString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false })}</td>
+                                    <td class="px-4 py-3 text-sm text-gray-900">${ticket.seat_number}</td>
+                                    <td class="px-4 py-3 text-sm text-gray-900">
+                                        <select class="nhaxe-status-select border border-gray-300 rounded-lg px-2 py-1 focus:ring-2 focus:ring-blue-500" data-ticket-id="${ticket.ticket_id}">
+                                            <option value="Đã thanh toán" ${ticket.status === 'Đã thanh toán' ? 'selected' : ''}>Đã thanh toán</option>
+                                            <option value="Chưa thanh toán" ${ticket.status === 'Chưa thanh toán' ? 'selected' : ''}>Chưa thanh toán</option>
+                                            <option value="Đã hủy" ${ticket.status === 'Đã hủy' ? 'selected' : ''}>Đã hủy</option>
+                                        </select>
+                                    </td>
+                                    <td class="px-4 py-3 text-sm text-gray-900">${ticket.note || ''}</td>
+                                    <td class="px-4 py-3 text-sm text-gray-900">
+                                        <button class="nhaxe-delete-ticket bg-red-600 text-white px-3 py-1 rounded-lg hover:bg-red-700 transition" data-ticket-id="${ticket.ticket_id}" data-nonce="<?php echo wp_create_nonce('nhaxemyduyen_delete_ticket'); ?>">Xóa</button>
+                                    </td>
+                                </tr>`;
+                            $('#nhaxe-ticket-table-body').prepend(rowHtml);
+                            $('#nhaxe-add-ticket-form')[0].reset();
+                            $('.nhaxe-add-form').addClass('hidden');
+                        } else {
+                            showMessage(response.data.message, 'red');
+                        }
+                    },
+                    error: function() {
+                        showMessage('Lỗi kết nối máy chủ.', 'red');
+                    }
+                });
+            });
+
+            // Xử lý cập nhật trạng thái qua AJAX
+            $(document).on('change', '.nhaxe-status-select', function() {
+                const ticketId = $(this).data('ticket-id');
+                const status = $(this).val();
+                const nonce = '<?php echo wp_create_nonce('nhaxemyduyen_ticket_nonce'); ?>';
+
+                $.ajax({
+                    url: '<?php echo admin_url('admin-ajax.php'); ?>',
+                    type: 'POST',
+                    data: {
+                        action: 'nhaxemyduyen_manage_tickets',
+                        nhaxemyduyen_action: 'update_status',
+                        ticket_id: ticketId,
+                        status: status,
+                        nhaxemyduyen_ticket_nonce: nonce
+                    },
+                    success: function(response) {
+                        if (response.success) {
+                            showMessage(response.data.message, 'green');
+                        } else {
+                            showMessage(response.data.message, 'red');
+                        }
+                    },
+                    error: function() {
+                        showMessage('Lỗi kết nối máy chủ.', 'red');
+                    }
+                });
+            });
+
+            // Xử lý xóa vé qua AJAX
+            $(document).on('click', '.nhaxe-delete-ticket', function() {
+                if (!confirm('Bạn có chắc chắn muốn xóa vé này?')) return;
+
+                const ticketId = $(this).data('ticket-id');
+                const nonce = $(this).data('nonce');
+
+                $.ajax({
+                    url: '<?php echo admin_url('admin-ajax.php'); ?>',
+                    type: 'POST',
+                    data: {
+                        action: 'nhaxemyduyen_manage_tickets',
+                        nhaxemyduyen_action: 'delete_ticket',
+                        ticket_id: ticketId,
+                        nhaxemyduyen_delete_nonce: nonce
+                    },
+                    success: function(response) {
+                        if (response.success) {
+                            showMessage(response.data.message, 'green');
+                            $(`tr[data-ticket-id="${ticketId}"]`).remove();
+                            if ($('#nhaxe-ticket-table-body tr').length === 0) {
+                                $('#nhaxe-ticket-table-body').html('<tr><td colspan="15" class="px-4 py-3 text-sm text-gray-500 text-center">Không có vé nào phù hợp với tiêu chí.</td></tr>');
+                            }
+                        } else {
+                            showMessage(response.data.message, 'red');
+                        }
+                    },
+                    error: function() {
+                        showMessage('Lỗi kết nối máy chủ.', 'red');
+                    }
+                });
+            });
+
+            // Xử lý bộ lọc qua AJAX
+            $('#nhaxe-filter-form').submit(function(e) {
+                e.preventDefault();
+                const formData = new FormData(this);
+                formData.append('action', 'nhaxemyduyen_manage_tickets');
+                formData.append('nhaxemyduyen_action', 'filter_tickets');
+
+                $.ajax({
+                    url: '<?php echo admin_url('admin-ajax.php'); ?>',
+                    type: 'POST',
+                    data: formData,
+                    processData: false,
+                    contentType: false,
+                    success: function(response) {
+                        if (response.success) {
+                            $('#nhaxe-ticket-table-body').html(response.data.table_html);
+                            showMessage('Danh sách vé đã được cập nhật.', 'green');
+                        } else {
+                            showMessage(response.data.message, 'red');
+                        }
+                    },
+                    error: function() {
+                        showMessage('Lỗi kết nối máy chủ.', 'red');
+                    }
+                });
+            });
         });
     </script>
     <?php
 }
+
+// Xử lý AJAX cho bộ lọc
+add_action('wp_ajax_nhaxemyduyen_manage_tickets', function() {
+    global $wpdb;
+    $table_tickets = $wpdb->prefix . 'tickets';
+    $table_trips = $wpdb->prefix . 'trips';
+    $table_locations = $wpdb->prefix . 'locations';
+    $table_drivers = $wpdb->prefix . 'drivers';
+    $table_vehicles = $wpdb->prefix . 'vehicles';
+
+    if (isset($_POST['nhaxemyduyen_action']) && $_POST['nhaxemyduyen_action'] === 'filter_tickets') {
+        // Bộ lọc
+        $filter_customer_phone = isset($_POST['filter_customer_phone']) ? sanitize_text_field($_POST['filter_customer_phone']) : '';
+        $filter_status = isset($_POST['filter_status']) ? sanitize_text_field($_POST['filter_status']) : '';
+        $filter_departure_date = isset($_POST['filter_departure_date']) ? sanitize_text_field($_POST['filter_departure_date']) : '';
+        $filter_from_location = isset($_POST['filter_from_location']) ? intval($_POST['filter_from_location']) : 0;
+        $filter_to_location = isset($_POST['filter_to_location']) ? intval($_POST['filter_to_location']) : 0;
+        $filter_pickup_location = isset($_POST['filter_pickup_location']) ? sanitize_text_field($_POST['filter_pickup_location']) : '';
+        $filter_dropoff_location = isset($_POST['filter_dropoff_location']) ? sanitize_text_field($_POST['filter_dropoff_location']) : '';
+        $filter_driver = isset($_POST['filter_driver']) ? intval($_POST['filter_driver']) : 0;
+        $filter_vehicle = isset($_POST['filter_vehicle']) ? intval($_POST['filter_vehicle']) : 0;
+
+        if (!empty($filter_departure_date)) {
+            $date = DateTime::createFromFormat('m/d/Y', $filter_departure_date);
+            if ($date) {
+                $filter_departure_date = $date->format('Y-m-d');
+            } else {
+                $filter_departure_date = '';
+            }
+        }
+
+        $where_conditions = [];
+        if (!empty($filter_customer_phone)) {
+            $where_conditions[] = $wpdb->prepare("t.customer_phone LIKE %s", '%' . $filter_customer_phone . '%');
+        }
+        if (!empty($filter_status)) {
+            $where_conditions[] = $wpdb->prepare("t.status = %s", $filter_status);
+        }
+        if (!empty($filter_departure_date)) {
+            $where_conditions[] = $wpdb->prepare("DATE(tr.departure_time) = %s", $filter_departure_date);
+        } else {
+            $where_conditions[] = "tr.departure_time >= CURDATE()";
+        }
+        if ($filter_from_location > 0) {
+            $where_conditions[] = $wpdb->prepare("tr.from_location_id = %d", $filter_from_location);
+        }
+        if ($filter_to_location > 0) {
+            $where_conditions[] = $wpdb->prepare("tr.to_location_id = %d", $filter_to_location);
+        }
+        if (!empty($filter_pickup_location)) {
+            $where_conditions[] = $wpdb->prepare("t.pickup_location = %s", $filter_pickup_location);
+        }
+        if (!empty($filter_dropoff_location)) {
+            $where_conditions[] = $wpdb->prepare("t.dropoff_location = %s", $filter_dropoff_location);
+        }
+        if ($filter_driver > 0) {
+            $where_conditions[] = $wpdb->prepare("tr.driver_id = %d", $filter_driver);
+        }
+        if ($filter_vehicle > 0) {
+            $where_conditions[] = $wpdb->prepare("tr.vehicle_id = %d", $filter_vehicle);
+        }
+
+        $where_clause = '';
+        if (!empty($where_conditions)) {
+            $where_clause = " WHERE " . implode(' AND ', $where_conditions);
+        }
+
+        // Lấy danh sách vé
+        $tickets = $wpdb->get_results("
+            SELECT t.*, tr.departure_time, tr.pickup_location as trip_pickup_location, tr.dropoff_location as trip_dropoff F_location, 
+                   l1.name as from_location, l2.name as to_location, d.name as driver_name, v.license_plate as vehicle_plate
+            FROM $table_tickets t
+            JOIN $table_trips tr ON t.trip_id = tr.trip_id
+            JOIN $table_locations l1 ON tr.from_location_id = l1.location_id
+            JOIN $table_locations l2 ON tr.to_location_id = l2.location_id
+            LEFT JOIN $table_drivers d ON tr.driver_id = d.driver_id
+            LEFT JOIN $table_vehicles v ON tr.vehicle_id = v.vehicle_id
+            $where_clause
+        ", ARRAY_A);
+
+        // Tạo HTML cho bảng vé
+        ob_start();
+        if (!empty($tickets)) {
+            foreach ($tickets as $ticket) {
+                ?>
+                <tr class="hover:bg-gray-50" data-ticket-id="<?php echo esc_attr($ticket['ticket_id']); ?>">
+                    <td class="px-4 py-3 text-sm text-gray-900"><?php echo esc_html($ticket['ticket_code']); ?></td>
+                    <td class="px-4 py-3 text-sm text-gray-900"><?php echo esc_html($ticket['customer_name']); ?></td>
+                    <td class="px-4 py-3 text-sm text-gray-900"><?php echo esc_html($ticket['customer_phone']); ?></td>
+                    <td class="px-4 py-3 text-sm text-gray-900"><?php echo esc_html($ticket['customer_email']); ?></td>
+                    <td class="px-4 py-3 text-sm text-gray-900"><?php echo esc_html($ticket['from_location']); ?></td>
+                    <td class="px-4 py-3 text-sm text-gray-900"><?php echo esc_html($ticket['to_location']); ?></td>
+                    <td class="px-4 py-3 text-sm text-gray-900"><?php echo esc_html($ticket['pickup_location'] ?: $ticket['trip_pickup_location']); ?></td>
+                    <td class="px-4 py-3 text-sm text-gray-900"><?php echo esc_html($ticket['dropoff_location'] ?: $ticket['trip_dropoff_location']); ?></td>
+                    <td class="px-4 py-3 text-sm text-gray-900"><?php echo esc_html($ticket['driver_name'] ?: 'Chưa chọn'); ?></td>
+                    <td class="px-4 py-3 text-sm text-gray-900"><?php echo esc_html($ticket['vehicle_plate'] ?: 'Chưa chọn'); ?></td>
+                    <td class="px-4 py-3 text-sm text-gray-900"><?php echo esc_html(date('m/d/Y H:i', strtotime($ticket['departure_time']))); ?></td>
+                    <td class="px-4 py-3 text-sm text-gray-900"><?php echo esc_html($ticket['seat_number']); ?></td>
+                    <td class="px-4 py-3 text-sm text-gray-900">
+                        <select class="nhaxe-status-select border border-gray-300 rounded-lg px-2 py-1 focus:ring-2 focus:ring-blue-500" data-ticket-id="<?php echo esc_attr($ticket['ticket_id']); ?>">
+                            <option value="Đã thanh toán" <?php selected($ticket['status'], 'Đã thanh toán'); ?>>Đã thanh toán</option>
+                            <option value="Chưa thanh toán" <?php selected($ticket['status'], 'Chưa thanh toán'); ?>>Chưa thanh toán</option>
+                            <option value="Đã hủy" <?php selected($ticket['status'], 'Đã hủy'); ?>>Đã hủy</option>
+                        </select>
+                    </td>
+                    <td class="px-4 py-3 text-sm text-gray-900"><?php echo esc_html($ticket['note']); ?></td>
+                    <td class="px-4 py-3 text-sm text-gray-900">
+                        <button class="nhaxe-delete-ticket bg-red-600 text-white px-3 py-1 rounded-lg hover:bg-red-700 transition" data-ticket-id="<?php echo esc_attr($ticket['ticket_id']); ?>" data-nonce="<?php echo wp_create_nonce('nhaxemyduyen_delete_ticket'); ?>">Xóa</button>
+                    </td>
+                </tr>
+                <?php
+            }
+        } else {
+            ?>
+            <tr>
+                <td colspan="15" class="px-4 py-3 text-sm text-gray-500 text-center">Không có vé nào phù hợp với tiêu chí.</td>
+            </tr>
+            <?php
+        }
+        $table_html = ob_get_clean();
+        wp_send_json_success(['table_html' => $table_html]);
+    }
+
+    nhaxemyduyen_manage_tickets();
+});
 
 // Trang quản lý người dùng
 function nhaxemyduyen_manage_users() {
@@ -2614,12 +2884,20 @@ function nhaxemyduyen_manage_drivers() {
     $table_drivers = $wpdb->prefix . 'drivers';
     $table_locations = $wpdb->prefix . 'locations';
 
+    // Kiểm tra quyền truy cập
+    if (!current_user_can('manage_options')) {
+        wp_die('Bạn không có quyền truy cập trang này.');
+    }
+
+    // Đăng ký script và style
     wp_enqueue_script('jquery');
     wp_enqueue_style('jquery-ui-css', '//code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css');
+    wp_enqueue_style('tailwind-css', 'https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css');
 
-    $locations = $wpdb->get_results("SELECT * FROM $table_locations", ARRAY_A);
+    // Lấy danh sách địa điểm
+    $locations = $wpdb->get_results("SELECT * FROM $table_locations ORDER BY name", ARRAY_A);
 
-    // Filters
+    // Bộ lọc
     $filter_name = isset($_POST['filter_name']) ? sanitize_text_field($_POST['filter_name']) : '';
     $filter_phone = isset($_POST['filter_phone']) ? sanitize_text_field($_POST['filter_phone']) : '';
     $filter_location = isset($_POST['filter_location']) ? intval($_POST['filter_location']) : 0;
@@ -2640,61 +2918,468 @@ function nhaxemyduyen_manage_drivers() {
         $where_clause = " WHERE " . implode(' AND ', $where_conditions);
     }
 
-    // Handle add driver
-    if (isset($_POST['nhaxemyduyen_add_driver'])) {
-        if (
-            empty($_POST['name']) ||
-            empty($_POST['phone']) ||
-            empty($_POST['license_number']) ||
-            empty($_POST['location_id']) ||
-            empty($_POST['status'])
-        ) {
-            echo '<div class="error"><p>Lỗi: Vui lòng điền đầy đủ các trường bắt buộc!</p></div>';
-        } else {
-            $driver_data = array(
-                'name' => sanitize_text_field($_POST['name']),
-                'phone' => sanitize_text_field($_POST['phone']),
-                'license_number' => sanitize_text_field($_POST['license_number']),
-                'location_id' => intval($_POST['location_id']),
-                'status' => sanitize_text_field($_POST['status']),
-                'note' => sanitize_textarea_field($_POST['note']),
-                'created_at' => current_time('mysql'),
-                'updated_at' => current_time('mysql'),
-            );
+    // Lấy danh sách tài xế
+    $drivers = $wpdb->get_results("
+        SELECT d.*, l.name as location_name
+        FROM $table_drivers d
+        LEFT JOIN $table_locations l ON d.location_id = l.location_id
+        $where_clause
+        ORDER BY d.created_at DESC
+    ", ARRAY_A);
 
-            $result = $wpdb->insert($table_drivers, $driver_data);
-            if ($result === false) {
-                echo '<div class="error"><p>Lỗi: Không thể thêm tài xế. ' . esc_html($wpdb->last_error) . '</p></div>';
-            } else {
-                wp_redirect(admin_url('admin.php?page=nhaxemyduyen-drivers'));
-                exit;
+    ?>
+    <div class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
+        <h1 class="text-3xl font-bold text-gray-900 mb-6">Quản lý Tài xế</h1>
+        <div id="nhaxe-message"></div>
+
+        <div class="bg-white shadow-lg rounded-lg p-6">
+            <h2 class="text-2xl font-semibold text-gray-800 mb-4">Danh sách Tài xế</h2>
+
+            <!-- Filter Form and Add Button -->
+            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6">
+                <form method="post" action="" class="flex flex-col sm:flex-row sm:items-center space-y-4 sm:space-y-0 sm:space-x-4" id="filter-form">
+                    <input type="text" name="filter_name" id="filter_name" value="<?php echo esc_attr($filter_name); ?>" placeholder="Tên tài xế" class="border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500">
+                    <input type="text" name="filter_phone" id="filter_phone" value="<?php echo esc_attr($filter_phone); ?>" placeholder="Số điện thoại" class="border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500">
+                    <select name="filter_location" id="filter_location" class="border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500">
+                        <option value="0">-- Chọn địa điểm --</option>
+                        <?php foreach ($locations as $location) : ?>
+                            <option value="<?php echo esc_attr($location['location_id']); ?>" <?php selected($filter_location, $location['location_id']); ?>>
+                                <?php echo esc_html($location['name']); ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                    <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition">Lọc</button>
+                </form>
+                <button class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition nhaxe-toggle-form mt-4 sm:mt-0" data-action="add">Thêm Tài xế</button>
+            </div>
+
+            <!-- Add/Edit Driver Form -->
+            <div class="nhaxe-add-form hidden bg-gray-50 p-6 rounded-lg mb-6">
+                <form id="driver-form" action="">
+                    <?php wp_nonce_field('nhaxemyduyen_driver_action', 'nhaxemyduyen_driver_nonce'); ?>
+                    <input type="hidden" name="nhaxemyduyen_driver_action" id="driver_action" value="add">
+                    <input type="hidden" name="driver_id" id="driver_id" value="">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label for="name" class="block text-sm font-medium text-gray-700">Tên tài xế</label>
+                            <input type="text" name="name" id="name" required class="mt-1 block w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500">
+                        </div>
+                        <div>
+                            <label for="phone" class="block text-sm font-medium text-gray-700">Số điện thoại</label>
+                            <input type="text" name="phone" id="phone" required class="mt-1 block w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500">
+                        </div>
+                        <div>
+                            <label for="license_number" class="block text-sm font-medium text-gray-700">Số GPLX</label>
+                            <input type="text" name="license_number" id="license_number" required class="mt-1 block w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500">
+                        </div>
+                        <div>
+                            <label for="location_id" class="block text-sm font-medium text-gray-700">Địa điểm</label>
+                            <select name="location_id" id="location_id" required class="mt-1 block w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500">
+                                <option value="">-- Chọn địa điểm --</option>
+                                <?php foreach ($locations as $location) : ?>
+                                    <option value="<?php echo esc_attr($location['location_id']); ?>">
+                                        <?php echo esc_html($location['name']); ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="status" class="block text-sm font-medium text-gray-700">Trạng thái</label>
+                            <select name="status" id="status" required class="mt-1 block w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500">
+                                <option value="Active">Hoạt động</option>
+                                <option value="Inactive">Không hoạt động</option>
+                            </select>
+                        </div>
+                        <div class="sm:col-span-2">
+                            <label for="note" class="block text-sm font-medium text-gray-700">Ghi chú</label>
+                            <textarea name="note" id="note" rows="4" class="mt-1 block w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"></textarea>
+                        </div>
+                    </div>
+                    <div class="mt-6 flex space-x-4">
+                        <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition" id="submit-driver">Thêm Tài xế</button>
+                        <button type="button" class="bg-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-400 transition nhaxe-toggle-form">Hủy</button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Drivers Table -->
+            <div class="overflow-x-auto">
+                <table class="min-w-full bg-white border border-gray-200" id="drivers-table">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tên</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Số điện thoại</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Số GPLX</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Địa điểm</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Trạng thái</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ghi chú</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Hành động</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-200">
+                        <?php if (empty($drivers)) : ?>
+                            <tr>
+                                <td colspan="7" class="px-4 py-3 text-sm text-gray-500 text-center">Không có tài xế nào phù hợp với tiêu chí.</td>
+                            </tr>
+                        <?php else : ?>
+                            <?php foreach ($drivers as $driver) : ?>
+                                <tr class="hover:bg-gray-50" data-driver-id="<?php echo esc_attr($driver['driver_id']); ?>">
+                                    <td class="px-4 py-3 text-sm text-gray-900"><?php echo esc_html($driver['name']); ?></td>
+                                    <td class="px-4 py-3 text-sm text-gray-900"><?php echo esc_html($driver['phone']); ?></td>
+                                    <td class="px-4 py-3 text-sm text-gray-900"><?php echo esc_html($driver['license_number']); ?></td>
+                                    <td class="px-4 py-3 text-sm text-gray-900"><?php echo esc_html($driver['location_name'] ?: 'Chưa có'); ?></td>
+                                    <td class="px-4 py-3 text-sm text-gray-900">
+                                        <select class="nhaxe-status-select border border-gray-300 rounded-lg px-2 py-1" data-driver-id="<?php echo esc_attr($driver['driver_id']); ?>">
+                                            <option value="Active" <?php selected($driver['status'], 'Active'); ?>>Hoạt động</option>
+                                            <option value="Inactive" <?php selected($driver['status'], 'Inactive'); ?>>Không hoạt động</option>
+                                        </select>
+                                    </td>
+                                    <td class="px-4 py-3 text-sm text-gray-900"><?php echo esc_html($driver['note']); ?></td>
+                                    <td class="px-4 py-3 text-sm text-gray-900">
+                                        <button class="bg-blue-600 text-white px-3 py-1 rounded-lg hover:bg-blue-700 transition mr-2 nhaxe-toggle-form" data-action="edit" data-driver-id="<?php echo esc_attr($driver['driver_id']); ?>">Sửa</button>
+                                        <button class="bg-red-600 text-white px-3 py-1 rounded-lg hover:bg-red-700 transition nhaxe-delete-driver" data-driver-id="<?php echo esc_attr($driver['driver_id']); ?>" data-nonce="<?php echo wp_create_nonce('nhaxemyduyen_delete_driver'); ?>">Xóa</button>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <style>
+        .nhaxe-add-form.hidden { display: none; }
+        table th, table td { white-space: nowrap; }
+        .ui-datepicker {
+            background: #fff;
+            border: 1px solid #d1d5db;
+            border-radius: 0.5rem;
+            padding: 0.5rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .ui-datepicker-header { background: #f3f4f6; border-radius: 0.25rem; }
+        .ui-datepicker-title { font-weight: 600; color: #1f2937; }
+        .ui-datepicker-prev, .ui-datepicker-next { cursor: pointer; color: #2563eb; }
+        .ui-datepicker-prev:hover, .ui-datepicker-next:hover { background: #e5e7eb; }
+        .ui-datepicker-calendar td a { text-align: center; padding: 0.25rem; border-radius: 0.25rem; color: #1f2937; }
+        .ui-datepicker-calendar td a:hover { background: #e5e7eb; }
+        .ui-state-highlight, .ui-widget-content .ui-state-highlight { background: #2563eb; color: #fff; border-radius: 0.25rem; }
+        @media (max-width: 640px) {
+            .sm\:flex-row { flex-direction: column; }
+            .sm\:space-x-4 { space-x: 0; space-y: 4px; }
+        }
+    </style>
+
+    <script>
+        jQuery(document).ready(function($) {
+            // Toggle form thêm/sửa
+            $(document).on('click', '.nhaxe-toggle-form', function() {
+                var action = $(this).data('action');
+                var driverId = $(this).data('driver-id');
+
+                if (action === 'add') {
+                    $('#driver_action').val('add');
+                    $('#driver_id').val('');
+                    $('#name').val('');
+                    $('#phone').val('');
+                    $('#license_number').val('');
+                    $('#location_id').val('');
+                    $('#status').val('Active');
+                    $('#note').val('');
+                    $('#submit-driver').text('Thêm Tài xế');
+                    $('.nhaxe-add-form').removeClass('hidden');
+                } else if (action === 'edit' && driverId) {
+                    $.ajax({
+                        url: ajaxurl,
+                        type: 'POST',
+                        data: {
+                            action: 'nhaxemyduyen_get_driver',
+                            driver_id: driverId,
+                            nonce: '<?php echo wp_create_nonce('nhaxemyduyen_get_driver'); ?>'
+                        },
+                        success: function(response) {
+                            if (response.success) {
+                                var driver = response.data;
+                                $('#driver_action').val('edit');
+                                $('#driver_id').val(driver.driver_id);
+                                $('#name').val(driver.name);
+                                $('#phone').val(driver.phone);
+                                $('#license_number').val(driver.license_number);
+                                $('#location_id').val(driver.location_id);
+                                $('#status').val(driver.status);
+                                $('#note').val(driver.note);
+                                $('#submit-driver').text('Cập nhật Tài xế');
+                                $('.nhaxe-add-form').removeClass('hidden');
+                            } else {
+                                $('#nhaxe-message').html('<div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6 rounded-lg"><p>Không thể lấy dữ liệu tài xế.</p></div>');
+                            }
+                        },
+                        error: function() {
+                            $('#nhaxe-message').html('<div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6 rounded-lg"><p>Đã có lỗi xảy ra.</p></div>');
+                        }
+                    });
+                } else {
+                    $('.nhaxe-add-form').addClass('hidden');
+                }
+            });
+
+            // Submit form thêm/sửa tài xế qua AJAX
+            $('#driver-form').submit(function(e) {
+                e.preventDefault();
+                var formData = $(this).serialize();
+
+                $.ajax({
+                    url: ajaxurl,
+                    type: 'POST',
+                    data: formData + '&action=nhaxemyduyen_manage_driver',
+                    success: function(response) {
+                        if (response.success) {
+                            $('#nhaxe-message').html('<div class="bg-green-100 border-l-4 border-green-500 text-green-700 p-4 mb-6 rounded-lg"><p>' + response.data.message + '</p></div>');
+                            $('.nhaxe-add-form').addClass('hidden');
+                            refreshDriversTable();
+                        } else {
+                            $('#nhaxe-message').html('<div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6 rounded-lg"><p>' + response.data.message + '</p></div>');
+                        }
+                    },
+                    error: function() {
+                        $('#nhaxe-message').html('<div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6 rounded-lg"><p>Đã có lỗi xảy ra.</p></div>');
+                    }
+                });
+            });
+
+            // Xóa tài xế qua AJAX
+            $(document).on('click', '.nhaxe-delete-driver', function() {
+                if (!confirm('Bạn có chắc chắn muốn xóa?')) return;
+
+                var driverId = $(this).data('driver-id');
+                var nonce = $(this).data('nonce');
+
+                $.ajax({
+                    url: ajaxurl,
+                    type: 'POST',
+                    data: {
+                        action: 'nhaxemyduyen_delete_driver',
+                        driver_id: driverId,
+                        nhaxemyduyen_delete_nonce: nonce
+                    },
+                    success: function(response) {
+                        if (response.success) {
+                            $('#nhaxe-message').html('<div class="bg-green-100 border-l-4 border-green-500 text-green-700 p-4 mb-6 rounded-lg"><p>Xóa tài xế thành công!</p></div>');
+                            refreshDriversTable();
+                        } else {
+                            $('#nhaxe-message').html('<div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6 rounded-lg"><p>' + response.data.message + '</p></div>');
+                        }
+                    },
+                    error: function() {
+                        $('#nhaxe-message').html('<div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6 rounded-lg"><p>Đã có lỗi xảy ra.</p></div>');
+                    }
+                });
+            });
+
+            // Cập nhật trạng thái qua AJAX
+            $(document).on('change', '.nhaxe-status-select', function() {
+                var driverId = $(this).data('driver-id');
+                var status = $(this).val();
+
+                $.ajax({
+                    url: ajaxurl,
+                    type: 'POST',
+                    data: {
+                        action: 'nhaxemyduyen_update_driver_status',
+                        driver_id: driverId,
+                        status: status,
+                        nonce: '<?php echo wp_create_nonce('nhaxemyduyen_update_driver_status'); ?>'
+                    },
+                    success: function(response) {
+                        if (response.success) {
+                            $('#nhaxe-message').html('<div class="bg-green-100 border-l-4 border-green-500 text-green-700 p-4 mb-6 rounded-lg"><p>Cập nhật trạng thái thành công!</p></div>');
+                            refreshDriversTable();
+                        } else {
+                            $('#nhaxe-message').html('<div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6 rounded-lg"><p>' + response.data.message + '</p></div>');
+                        }
+                    },
+                    error: function() {
+                        $('#nhaxe-message').html('<div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6 rounded-lg"><p>Đã có lỗi xảy ra.</p></div>');
+                    }
+                });
+            });
+
+            // Lọc danh sách tài xế qua AJAX
+            $('#filter-form').submit(function(e) {
+                e.preventDefault();
+                var formData = $(this).serialize();
+
+                $.ajax({
+                    url: ajaxurl,
+                    type: 'POST',
+                    data: formData + '&action=nhaxemyduyen_filter_drivers',
+                    success: function(response) {
+                        if (response.success) {
+                            $('#drivers-table tbody').html(response.data.html);
+                        } else {
+                            $('#nhaxe-message').html('<div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6 rounded-lg"><p>Lỗi khi lọc tài xế.</p></div>');
+                        }
+                    },
+                    error: function() {
+                        $('#nhaxe-message').html('<div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6 rounded-lg"><p>Đã có lỗi xảy ra.</p></div>');
+                    }
+                });
+            });
+
+            // Hàm làm mới bảng tài xế
+            function refreshDriversTable() {
+                var formData = $('#filter-form').serialize();
+                $.ajax({
+                    url: ajaxurl,
+                    type: 'POST',
+                    data: formData + '&action=nhaxemyduyen_filter_drivers',
+                    success: function(response) {
+                        if (response.success) {
+                            $('#drivers-table tbody').html(response.data.html);
+                        } else {
+                            $('#nhaxe-message').html('<div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6 rounded-lg"><p>Lỗi khi làm mới danh sách tài xế.</p></div>');
+                        }
+                    },
+                    error: function() {
+                        $('#nhaxe-message').html('<div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6 rounded-lg"><p>Đã có lỗi xảy ra.</p></div>');
+                    }
+                });
             }
-        }
+        });
+    </script>
+    <?php
+}
+
+// AJAX lấy dữ liệu tài xế
+add_action('wp_ajax_nhaxemyduyen_get_driver', 'nhaxemyduyen_get_driver_callback');
+function nhaxemyduyen_get_driver_callback() {
+    check_ajax_referer('nhaxemyduyen_get_driver', 'nonce');
+
+    global $wpdb;
+    $table_drivers = $wpdb->prefix . 'drivers';
+    $driver_id = intval($_POST['driver_id']);
+
+    $driver = $wpdb->get_row($wpdb->prepare("SELECT * FROM $table_drivers WHERE driver_id = %d", $driver_id), ARRAY_A);
+
+    if ($driver) {
+        wp_send_json_success($driver);
+    } else {
+        wp_send_json_error(['message' => 'Không tìm thấy tài xế.']);
+    }
+}
+
+// AJAX thêm/sửa tài xế
+add_action('wp_ajax_nhaxemyduyen_manage_driver', 'nhaxemyduyen_manage_driver_callback');
+function nhaxemyduyen_manage_driver_callback() {
+    check_ajax_referer('nhaxemyduyen_driver_action', 'nhaxemyduyen_driver_nonce');
+
+    global $wpdb;
+    $table_drivers = $wpdb->prefix . 'drivers';
+
+    $action = sanitize_text_field($_POST['nhaxemyduyen_driver_action']);
+    $driver_id = isset($_POST['driver_id']) ? intval($_POST['driver_id']) : 0;
+    $name = sanitize_text_field($_POST['name']);
+    $phone = sanitize_text_field($_POST['phone']);
+    $license_number = sanitize_text_field($_POST['license_number']);
+    $location_id = intval($_POST['location_id']);
+    $status = sanitize_text_field($_POST['status']);
+    $note = sanitize_textarea_field($_POST['note']);
+
+    if (empty($name) || empty($phone) || empty($license_number) || empty($location_id) || empty($status)) {
+        wp_send_json_error(['message' => 'Vui lòng điền đầy đủ các trường bắt buộc.']);
     }
 
-    // Handle update status
-    if (isset($_POST['nhaxemyduyen_driver_action'])) {
-        $driver_id = intval($_POST['driver_id']);
-        $status = sanitize_text_field($_POST['status']);
-        $result = $wpdb->update($table_drivers, array('status' => $status, 'updated_at' => current_time('mysql')), array('driver_id' => $driver_id));
-        if ($result === false) {
-            echo '<div class="error"><p>Lỗi: Không thể cập nhật trạng thái. ' . esc_html($wpdb->last_error) . '</p></div>';
+    $driver_data = [
+        'name' => $name,
+        'phone' => $phone,
+        'license_number' => $license_number,
+        'location_id' => $location_id,
+        'status' => $status,
+        'note' => $note,
+        'updated_at' => current_time('mysql'),
+    ];
+
+    if ($action === 'add') {
+        $driver_data['created_at'] = current_time('mysql');
+        $result = $wpdb->insert($table_drivers, $driver_data);
+        if ($result) {
+            wp_send_json_success(['message' => 'Thêm tài xế thành công!']);
         } else {
-            wp_redirect(admin_url('admin.php?page=nhaxemyduyen-drivers'));
-            exit;
+            wp_send_json_error(['message' => 'Lỗi khi thêm tài xế.']);
         }
+    } elseif ($action === 'edit' && $driver_id) {
+        $result = $wpdb->update($table_drivers, $driver_data, ['driver_id' => $driver_id]);
+        if ($result !== false) {
+            wp_send_json_success(['message' => 'Cập nhật tài xế thành công!']);
+        } else {
+            wp_send_json_error(['message' => 'Lỗi khi cập nhật tài xế.']);
+        }
+    } else {
+        wp_send_json_error(['message' => 'Hành động không hợp lệ.']);
+    }
+}
+
+// AJAX xóa tài xế
+add_action('wp_ajax_nhaxemyduyen_delete_driver', 'nhaxemyduyen_delete_driver_callback');
+function nhaxemyduyen_delete_driver_callback() {
+    check_ajax_referer('nhaxemyduyen_delete_driver', 'nhaxemyduyen_delete_nonce');
+
+    global $wpdb;
+    $table_drivers = $wpdb->prefix . 'drivers';
+    $driver_id = intval($_POST['driver_id']);
+
+    $result = $wpdb->delete($table_drivers, ['driver_id' => $driver_id]);
+    if ($result) {
+        wp_send_json_success(['message' => 'Xóa tài xế thành công!']);
+    } else {
+        wp_send_json_error(['message' => 'Lỗi khi xóa tài xế.']);
+    }
+}
+
+// AJAX cập nhật trạng thái tài xế
+add_action('wp_ajax_nhaxemyduyen_update_driver_status', 'nhaxemyduyen_update_driver_status_callback');
+function nhaxemyduyen_update_driver_status_callback() {
+    check_ajax_referer('nhaxemyduyen_update_driver_status', 'nonce');
+
+    global $wpdb;
+    $table_drivers = $wpdb->prefix . 'drivers';
+    $driver_id = intval($_POST['driver_id']);
+    $status = sanitize_text_field($_POST['status']);
+
+    $result = $wpdb->update($table_drivers, ['status' => $status, 'updated_at' => current_time('mysql')], ['driver_id' => $driver_id]);
+    if ($result !== false) {
+        wp_send_json_success(['message' => 'Cập nhật trạng thái thành công!']);
+    } else {
+        wp_send_json_error(['message' => 'Lỗi khi cập nhật trạng thái.']);
+    }
+}
+
+// AJAX lọc tài xế
+add_action('wp_ajax_nhaxemyduyen_filter_drivers', 'nhaxemyduyen_filter_drivers_callback');
+function nhaxemyduyen_filter_drivers_callback() {
+    global $wpdb;
+    $table_drivers = $wpdb->prefix . 'drivers';
+    $table_locations = $wpdb->prefix . 'locations';
+
+    $filter_name = isset($_POST['filter_name']) ? sanitize_text_field($_POST['filter_name']) : '';
+    $filter_phone = isset($_POST['filter_phone']) ? sanitize_text_field($_POST['filter_phone']) : '';
+    $filter_location = isset($_POST['filter_location']) ? intval($_POST['filter_location']) : 0;
+
+    $where_conditions = [];
+    if (!empty($filter_name)) {
+        $where_conditions[] = $wpdb->prepare("d.name LIKE %s", '%' . $filter_name . '%');
+    }
+    if (!empty($filter_phone)) {
+        $where_conditions[] = $wpdb->prepare("d.phone LIKE %s", '%' . $filter_phone . '%');
+    }
+    if ($filter_location > 0) {
+        $where_conditions[] = $wpdb->prepare("d.location_id = %d", $filter_location);
     }
 
-    // Handle delete driver
-    if (isset($_GET['action']) && $_GET['action'] === 'delete' && isset($_GET['driver_id'])) {
-        $driver_id = intval($_GET['driver_id']);
-        $result = $wpdb->delete($table_drivers, array('driver_id' => $driver_id));
-        if ($result === false) {
-            echo '<div class="error"><p>Lỗi: Không thể xóa tài xế. ' . esc_html($wpdb->last_error) . '</p></div>';
-        } else {
-            wp_redirect(admin_url('admin.php?page=nhaxemyduyen-drivers'));
-            exit;
-        }
+    $where_clause = '';
+    if (!empty($where_conditions)) {
+        $where_clause = " WHERE " . implode(' AND ', $where_conditions);
     }
 
     $drivers = $wpdb->get_results("
@@ -2705,137 +3390,36 @@ function nhaxemyduyen_manage_drivers() {
         ORDER BY d.created_at DESC
     ", ARRAY_A);
 
-    ?>
-    <div class="wrap nhaxe-wrap">
-        <h1 class="nhaxe-title">Quản lý Tài xế</h1>
-
-        <div class="nhaxe-card">
-            <h2>Danh sách Tài xế</h2>
-
-            <div class="nhaxe-filter-add-container">
-                <form method="post" action="" class="nhaxe-filter-form">
-                    <div class="nhaxe-filter-group">
-                        <input type="text" name="filter_name" id="filter_name" value="<?php echo esc_attr($filter_name); ?>" placeholder="Tên tài xế">
-                        <input type="text" name="filter_phone" id="filter_phone" value="<?php echo esc_attr($filter_phone); ?>" placeholder="Số điện thoại">
-                        <select name="filter_location" id="filter_location">
-                            <option value="0">-- Chọn địa điểm --</option>
-                            <?php foreach ($locations as $location) : ?>
-                                <option value="<?php echo esc_attr($location['location_id']); ?>" <?php selected($filter_location, $location['location_id']); ?>>
-                                    <?php echo esc_html($location['name']); ?>
-                                </option>
-                            <?php endforeach; ?>
-                        </select>
-                        <input type="submit" class="button nhaxe-button-primary" value="Lọc">
-                    </div>
-                </form>
-
-                <button class="button nhaxe-button-primary nhaxe-toggle-form">Thêm Tài xế</button>
-            </div>
-
-            <div class="nhaxe-add-form" style="display: none;">
-                <form method="post" action="">
-                    <input type="hidden" name="nhaxemyduyen_add_driver" value="1">
-                    <table class="form-table nhaxe-form-table">
-                        <tr>
-                            <th><label for="name">Tên tài xế</label></th>
-                            <td><input type="text" name="name" id="name" required></td>
-                        </tr>
-                        <tr>
-                            <th><label for="phone">Số điện thoại</label></th>
-                            <td><input type="text" name="phone" id="phone" required></td>
-                        </tr>
-                        <tr>
-                            <th><label for="license_number">Số GPLX</label></th>
-                            <td><input type="text" name="license_number" id="license_number" required></td>
-                        </tr>
-                        <tr>
-                            <th><label for="location_id">Địa điểm</label></th>
-                            <td>
-                                <select name="location_id" id="location_id" required>
-                                    <option value="">-- Chọn địa điểm --</option>
-                                    <?php foreach ($locations as $location) : ?>
-                                        <option value="<?php echo esc_attr($location['location_id']); ?>">
-                                            <?php echo esc_html($location['name']); ?>
-                                        </option>
-                                    <?php endforeach; ?>
-                                </select>
-                            </td>
-                        </tr>
-                        <tr>
-                            <th><label for="status">Trạng thái</label></th>
-                            <td>
-                                <select name="status" id="status" required>
-                                    <option value="Active" selected>Hoạt động</option>
-                                    <option value="Inactive">Không hoạt động</option>
-                                </select>
-                            </td>
-                        </tr>
-                        <tr>
-                            <th><label for="note">Ghi chú</label></th>
-                            <td><textarea name="note" id="note" rows="4"></textarea></td>
-                        </tr>
-                    </table>
-                    <p class="submit">
-                        <input type="submit" class="button nhaxe-button-primary" value="Thêm Tài xế">
-                        <button type="button" class="button nhaxe-button-cancel nhaxe-toggle-form">Hủy</button>
-                    </p>
-                </form>
-            </div>
-
-            <table class="widefat nhaxe-table">
-                <thead>
-                    <tr>
-                        <th>Tên</th>
-                        <th>Số điện thoại</th>
-                        <th>Số GPLX</th>
-                        <th>Địa điểm</th>
-                        <th>Trạng thái</th>
-                        <th>Ghi chú</th>
-                        <th>Hành động</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php foreach ($drivers as $driver) : ?>
-                        <tr>
-                            <td><?php echo esc_html($driver['name']); ?></td>
-                            <td><?php echo esc_html($driver['phone']); ?></td>
-                            <td><?php echo esc_html($driver['license_number']); ?></td>
-                            <td><?php echo esc_html($driver['location_name']); ?></td>
-                            <td>
-                                <form method="post" action="">
-                                    <input type="hidden" name="nhaxemyduyen_driver_action" value="update">
-                                    <input type="hidden" name="driver_id" value="<?php echo esc_attr($driver['driver_id']); ?>">
-                                    <select name="status" onchange="this.form.submit()" class="nhaxe-select">
-                                        <option value="Active" <?php selected($driver['status'], 'Active'); ?>>Hoạt động</option>
-                                        <option value="Inactive" <?php selected($driver['status'], 'Inactive'); ?>>Không hoạt động</option>
-                                    </select>
-                                </form>
-                            </td>
-                            <td><?php echo esc_html($driver['note']); ?></td>
-                            <td>
-                                <a href="<?php echo admin_url('admin.php?page=nhaxemyduyen-drivers&action=delete&driver_id=' . $driver['driver_id']); ?>" onclick="return confirm('Bạn có chắc chắn muốn xóa?')" class="nhaxe-button nhaxe-button-delete">Xóa</a>
-                            </td>
-                        </tr>
-                    <?php endforeach; ?>
-                    <?php if (empty($drivers)) : ?>
-                        <tr>
-                            <td colspan="7">Không có tài xế nào phù hợp với tiêu chí.</td>
-                        </tr>
-                    <?php endif; ?>
-                </tbody>
-            </table>
-        </div>
-    </div>
-
-    <script>
-        jQuery(document).ready(function($) {
-            $('.nhaxe-toggle-form').click(function() {
-                $('.nhaxe-add-form').slideToggle(300);
-            });
-        });
-    </script>
-    <?php
+    ob_start();
+    if (empty($drivers)) {
+        echo '<tr><td colspan="7" class="px-4 py-3 text-sm text-gray-500 text-center">Không có tài xế nào phù hợp với tiêu chí.</td></tr>';
+    } else {
+        foreach ($drivers as $driver) {
+            ?>
+            <tr class="hover:bg-gray-50" data-driver-id="<?php echo esc_attr($driver['driver_id']); ?>">
+                <td class="px-4 py-3 text-sm text-gray-900"><?php echo esc_html($driver['name']); ?></td>
+                <td class="px-4 py-3 text-sm text-gray-900"><?php echo esc_html($driver['phone']); ?></td>
+                <td class="px-4 py-3 text-sm text-gray-900"><?php echo esc_html($driver['license_number']); ?></td>
+                <td class="px-4 py-3 text-sm text-gray-900"><?php echo esc_html($driver['location_name'] ?: 'Chưa có'); ?></td>
+                <td class="px-4 py-3 text-sm text-gray-900">
+                    <select class="nhaxe-status-select border border-gray-300 rounded-lg px-2 py-1" data-driver-id="<?php echo esc_attr($driver['driver_id']); ?>">
+                        <option value="Active" <?php selected($driver['status'], 'Active'); ?>>Hoạt động</option>
+                        <option value="Inactive" <?php selected($driver['status'], 'Inactive'); ?>>Không hoạt động</option>
+                    </select>
+                </td>
+                <td class="px-4 py-3 text-sm text-gray-900"><?php echo esc_html($driver['note']); ?></td>
+                <td class="px-4 py-3 text-sm text-gray-900">
+                    <button class="bg-blue-600 text-white px-3 py-1 rounded-lg hover:bg-blue-700 transition mr-2 nhaxe-toggle-form" data-action="edit" data-driver-id="<?php echo esc_attr($driver['driver_id']); ?>">Sửa</button>
+                    <button class="bg-red-600 text-white px-3 py-1 rounded-lg hover:bg-red-700 transition nhaxe-delete-driver" data-driver-id="<?php echo esc_attr($driver['driver_id']); ?>" data-nonce="<?php echo wp_create_nonce('nhaxemyduyen_delete_driver'); ?>">Xóa</button>
+                </td>
+            </tr>
+            <?php
+        }
+    }
+    $html = ob_get_clean();
+    wp_send_json_success(['html' => $html]);
 }
+
 
 // Trang quản lý xe
 function nhaxemyduyen_manage_vehicles() {
@@ -2843,20 +3427,21 @@ function nhaxemyduyen_manage_vehicles() {
     $table_vehicles = $wpdb->prefix . 'vehicles';
     $table_locations = $wpdb->prefix . 'locations';
 
-    // Đăng ký script WordPress Media Uploader và jQuery
-    wp_enqueue_media();
-    wp_enqueue_script('jquery');
-    wp_enqueue_style('jquery-ui-css', '//code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css');
-
     // Kiểm tra quyền truy cập
     if (!current_user_can('manage_options')) {
         wp_die('Bạn không có quyền truy cập trang này.');
     }
 
+    // Đăng ký script và style
+    wp_enqueue_media();
+    wp_enqueue_script('jquery');
+    wp_enqueue_style('jquery-ui-css', '//code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css');
+    wp_enqueue_style('tailwind-css', 'https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css');
+
     // Lấy danh sách địa điểm
-    $locations = $wpdb->get_results("SELECT * FROM $table_locations", ARRAY_A);
+    $locations = $wpdb->get_results("SELECT * FROM $table_locations ORDER BY name", ARRAY_A);
     if ($wpdb->last_error) {
-        echo '<div class="error"><p>Lỗi truy vấn địa điểm: ' . esc_html($wpdb->last_error) . '</p></div>';
+        echo '<div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6 rounded-lg"><p>Lỗi truy vấn địa điểm: ' . esc_html($wpdb->last_error) . '</p></div>';
         return;
     }
 
@@ -2881,99 +3466,6 @@ function nhaxemyduyen_manage_vehicles() {
         $where_clause = " WHERE " . implode(' AND ', $where_conditions);
     }
 
-    // Xử lý thêm hoặc chỉnh sửa xe
-    if (isset($_POST['nhaxemyduyen_vehicle_action']) && isset($_POST['nhaxemyduyen_vehicle_nonce']) && wp_verify_nonce($_POST['nhaxemyduyen_vehicle_nonce'], 'nhaxemyduyen_vehicle_action')) {
-        $action = $_POST['nhaxemyduyen_vehicle_action'];
-
-        if (
-            empty($_POST['license_plate']) ||
-            empty($_POST['type']) ||
-            empty($_POST['capacity']) ||
-            empty($_POST['location_id']) ||
-            empty($_POST['status'])
-        ) {
-            echo '<div class="error"><p>Lỗi: Vui lòng điền đầy đủ các trường bắt buộc!</p></div>';
-        } else {
-            $capacity = intval($_POST['capacity']);
-            if ($capacity <= 0) {
-                echo '<div class="error"><p>Lỗi: Số chỗ phải lớn hơn 0!</p></div>';
-            } else {
-                $vehicle_data = array(
-                    'license_plate' => sanitize_text_field($_POST['license_plate']),
-                    'type' => sanitize_text_field($_POST['type']),
-                    'capacity' => $capacity,
-                    'location_id' => intval($_POST['location_id']),
-                    'status' => sanitize_text_field($_POST['status']),
-                    'note' => sanitize_textarea_field($_POST['note']),
-                    'image' => sanitize_text_field($_POST['image']),
-                    'updated_at' => current_time('mysql'),
-                );
-
-                if ($action === 'add') {
-                    $vehicle_data['created_at'] = current_time('mysql');
-                    $result = $wpdb->insert($table_vehicles, $vehicle_data);
-                    if ($result === false) {
-                        echo '<div class="error"><p>Lỗi: Không thể thêm xe. ' . esc_html($wpdb->last_error) . '</p></div>';
-                    } else {
-                        echo '<div class="updated"><p>Thêm xe thành công!</p></div>';
-                        wp_redirect(admin_url('admin.php?page=nhaxemyduyen-vehicles'));
-                        exit;
-                    }
-                } elseif ($action === 'edit') {
-                    $vehicle_id = intval($_POST['vehicle_id']);
-                    $result = $wpdb->update($table_vehicles, $vehicle_data, array('vehicle_id' => $vehicle_id));
-                    if ($result === false) {
-                        echo '<div class="error"><p>Lỗi: Không thể cập nhật xe. ' . esc_html($wpdb->last_error) . '</p></div>';
-                    } else {
-                        echo '<div class="updated"><p>Cập nhật xe thành công!</p></div>';
-                        wp_redirect(admin_url('admin.php?page=nhaxemyduyen-vehicles'));
-                        exit;
-                    }
-                }
-            }
-        }
-    }
-
-    // Xử lý cập nhật trạng thái
-    if (isset($_POST['nhaxemyduyen_vehicle_status']) && isset($_POST['nhaxemyduyen_status_nonce']) && wp_verify_nonce($_POST['nhaxemyduyen_status_nonce'], 'nhaxemyduyen_vehicle_status')) {
-        $vehicle_id = intval($_POST['vehicle_id']);
-        $status = sanitize_text_field($_POST['status']);
-        $result = $wpdb->update($table_vehicles, array('status' => $status, 'updated_at' => current_time('mysql')), array('vehicle_id' => $vehicle_id));
-        if ($result === false) {
-            echo '<div class="error"><p>Lỗi: Không thể cập nhật trạng thái. ' . esc_html($wpdb->last_error) . '</p></div>';
-        } else {
-            wp_redirect(admin_url('admin.php?page=nhaxemyduyen-vehicles'));
-            exit;
-        }
-    }
-
-    // Xử lý hành động "Sửa" (hiển thị form)
-    $vehicle_to_edit = null;
-    if (isset($_POST['nhaxemyduyen_edit_vehicle']) && isset($_POST['vehicle_id']) && isset($_POST['nhaxemyduyen_edit_nonce']) && wp_verify_nonce($_POST['nhaxemyduyen_edit_nonce'], 'nhaxemyduyen_edit_vehicle')) {
-        $vehicle_id = intval($_POST['vehicle_id']);
-        if ($vehicle_id > 0) {
-            $vehicle_to_edit = $wpdb->get_row($wpdb->prepare("SELECT * FROM $table_vehicles WHERE vehicle_id = %d", $vehicle_id), ARRAY_A);
-            if (!$vehicle_to_edit) {
-                echo '<div class="error"><p>Lỗi: Không tìm thấy xe với ID ' . esc_html($vehicle_id) . '!</p></div>';
-            }
-        } else {
-            echo '<div class="error"><p>Lỗi: ID xe không hợp lệ!</p></div>';
-        }
-    }
-
-    // Xử lý xóa xe
-    if (isset($_POST['nhaxemyduyen_delete_vehicle']) && isset($_POST['vehicle_id']) && isset($_POST['nhaxemyduyen_delete_nonce']) && wp_verify_nonce($_POST['nhaxemyduyen_delete_nonce'], 'nhaxemyduyen_delete_vehicle')) {
-        $vehicle_id = intval($_POST['vehicle_id']);
-        $result = $wpdb->delete($table_vehicles, array('vehicle_id' => $vehicle_id));
-        if ($result === false) {
-            echo '<div class="error"><p>Lỗi: Không thể xóa xe. ' . esc_html($wpdb->last_error) . '</p></div>';
-        } else {
-            echo '<div class="updated"><p>Xóa xe thành công!</p></div>';
-            wp_redirect(admin_url('admin.php?page=nhaxemyduyen-vehicles'));
-            exit;
-        }
-    }
-
     // Lấy danh sách xe
     $vehicles = $wpdb->get_results("
         SELECT v.*, l.name as location_name
@@ -2983,176 +3475,227 @@ function nhaxemyduyen_manage_vehicles() {
         ORDER BY v.created_at DESC
     ", ARRAY_A);
     if ($wpdb->last_error) {
-        echo '<div class="error"><p>Lỗi truy vấn danh sách xe: ' . esc_html($wpdb->last_error) . '</p></div>';
+        echo '<div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6 rounded-lg"><p>Lỗi truy vấn danh sách xe: ' . esc_html($wpdb->last_error) . '</p></div>';
         return;
     }
 
     ?>
-    <div class="wrap nhaxe-wrap">
-        <h1 class="nhaxe-title">Quản lý Xe</h1>
+    <div class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
+        <h1 class="text-3xl font-bold text-gray-900 mb-6">Quản lý Xe</h1>
+        <div id="nhaxe-message"></div>
 
-        <div class="nhaxe-card">
-            <h2>Danh sách Xe</h2>
+        <div class="bg-white shadow-lg rounded-lg p-6">
+            <h2 class="text-2xl font-semibold text-gray-800 mb-4">Danh sách Xe</h2>
 
-            <div class="nhaxe-filter-add-container">
-                <form method="post" action="" class="nhaxe-filter-form">
-                    <div class="nhaxe-filter-group">
-                        <input type="text" name="filter_license_plate" id="filter_license_plate" value="<?php echo esc_attr($filter_license_plate); ?>" placeholder="Biển số xe">
-                        <input type="text" name="filter_type" id="filter_type" value="<?php echo esc_attr($filter_type); ?>" placeholder="Loại xe">
-                        <select name="filter_location" id="filter_location">
-                            <option value="0">-- Chọn địa điểm --</option>
-                            <?php foreach ($locations as $location) : ?>
-                                <option value="<?php echo esc_attr($location['location_id']); ?>" <?php selected($filter_location, $location['location_id']); ?>>
-                                    <?php echo esc_html($location['name']); ?>
-                                </option>
-                            <?php endforeach; ?>
-                        </select>
-                        <input type="submit" class="button nhaxe-button-primary" value="Lọc">
+            <!-- Filter Form and Add Button -->
+            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6">
+                <form method="post" action="" class="flex flex-col sm:flex-row sm:items-center space-y-4 sm:space-y-0 sm:space-x-4" id="filter-form">
+                    <input type="text" name="filter_license_plate" id="filter_license_plate" value="<?php echo esc_attr($filter_license_plate); ?>" placeholder="Biển số xe" class="border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500">
+                    <input type="text" name="filter_type" id="filter_type" value="<?php echo esc_attr($filter_type); ?>" placeholder="Loại xe" class="border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500">
+                    <select name="filter_location" id="filter_location" class="border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500">
+                        <option value="0">-- Chọn địa điểm --</option>
+                        <?php foreach ($locations as $location) : ?>
+                            <option value="<?php echo esc_attr($location['location_id']); ?>" <?php selected($filter_location, $location['location_id']); ?>>
+                                <?php echo esc_html($location['name']); ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                    <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition">Lọc</button>
+                </form>
+                <button class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition nhaxe-toggle-form mt-4 sm:mt-0" data-action="add">Thêm Xe</button>
+            </div>
+
+            <!-- Add/Edit Vehicle Form -->
+            <div class="nhaxe-add-form hidden bg-gray-50 p-6 rounded-lg mb-6">
+                <form id="vehicle-form" action="">
+                    <?php wp_nonce_field('nhaxemyduyen_vehicle_action', 'nhaxemyduyen_vehicle_nonce'); ?>
+                    <input type="hidden" name="nhaxemyduyen_vehicle_action" id="vehicle_action" value="add">
+                    <input type="hidden" name="vehicle_id" id="vehicle_id" value="">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label for="license_plate" class="block text-sm font-medium text-gray-700">Biển số xe</label>
+                            <input type="text" name="license_plate" id="license_plate" required class="mt-1 block w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500">
+                        </div>
+                        <div>
+                            <label for="type" class="block text-sm font-medium text-gray-700">Loại xe</label>
+                            <input type="text" name="type" id="type" required class="mt-1 block w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500">
+                        </div>
+                        <div>
+                            <label for="capacity" class="block text-sm font-medium text-gray-700">Số chỗ</label>
+                            <input type="number" name="capacity" id="capacity" min="1" required class="mt-1 block w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500">
+                        </div>
+                        <div>
+                            <label for="location_id" class="block text-sm font-medium text-gray-700">Địa điểm</label>
+                            <select name="location_id" id="location_id" required class="mt-1 block w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500">
+                                <option value="">-- Chọn địa điểm --</option>
+                                <?php foreach ($locations as $location) : ?>
+                                    <option value="<?php echo esc_attr($location['location_id']); ?>">
+                                        <?php echo esc_html($location['name']); ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="status" class="block text-sm font-medium text-gray-700">Trạng thái</label>
+                            <select name="status" id="status" required class="mt-1 block w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500">
+                                <option value="Active">Hoạt động</option>
+                                <option value="Inactive">Không hoạt động</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="image" class="block text-sm font-medium text-gray-700">Hình ảnh xe (tùy chọn)</label>
+                            <div class="flex items-center space-x-2">
+                                <input type="text" name="image" id="image" class="mt-1 block w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500">
+                                <button type="button" class="bg-blue-600 text-white px-3 py-2 rounded-lg hover:bg-blue-700 transition nhaxe-upload-button">Chọn</button>
+                            </div>
+                            <div class="nhaxe-image-preview mt-2"></div>
+                        </div>
+                        <div class="sm:col-span-2">
+                            <label for="note" class="block text-sm font-medium text-gray-700">Ghi chú</label>
+                            <textarea name="note" id="note" rows="4" class="mt-1 block w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"></textarea>
+                        </div>
+                    </div>
+                    <div class="mt-6 flex space-x-4">
+                        <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition" id="submit-vehicle">Thêm Xe</button>
+                        <button type="button" class="bg-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-400 transition nhaxe-toggle-form">Hủy</button>
                     </div>
                 </form>
-
-                <button class="button nhaxe-button-primary nhaxe-toggle-form">Thêm Xe</button>
             </div>
 
-            <!-- Form thêm hoặc chỉnh sửa xe -->
-            <div class="nhaxe-add-form" style="display: <?php echo $vehicle_to_edit ? 'block' : 'none'; ?>;">
-                <form method="post" action="">
-                    <?php wp_nonce_field('nhaxemyduyen_vehicle_action', 'nhaxemyduyen_vehicle_nonce'); ?>
-                    <input type="hidden" name="nhaxemyduyen_vehicle_action" value="<?php echo $vehicle_to_edit ? 'edit' : 'add'; ?>">
-                    <input type="hidden" name="vehicle_id" value="<?php echo $vehicle_to_edit ? esc_attr($vehicle_to_edit['vehicle_id']) : ''; ?>">
-                    <table class="form-table nhaxe-form-table">
+            <!-- Vehicles Table -->
+            <div class="overflow-x-auto">
+                <table class="min-w-full bg-white border border-gray-200" id="vehicles-table">
+                    <thead class="bg-gray-50">
                         <tr>
-                            <th><label for="license_plate">Biển số xe</label></th>
-                            <td><input type="text" name="license_plate" id="license_plate" value="<?php echo $vehicle_to_edit ? esc_attr($vehicle_to_edit['license_plate']) : ''; ?>" required></td>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Biển số xe</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Loại xe</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Số chỗ</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Địa điểm</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Hình ảnh xe</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Trạng thái</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ghi chú</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Hành động</th>
                         </tr>
-                        <tr>
-                            <th><label for="type">Loại xe</label></th>
-                            <td><input type="text" name="type" id="type" value="<?php echo $vehicle_to_edit ? esc_attr($vehicle_to_edit['type']) : ''; ?>" required></td>
-                        </tr>
-                        <tr>
-                            <th><label for="capacity">Số chỗ</label></th>
-                            <td><input type="number" name="capacity" id="capacity" min="1" value="<?php echo $vehicle_to_edit ? esc_attr($vehicle_to_edit['capacity']) : ''; ?>" required></td>
-                        </tr>
-                        <tr>
-                            <th><label for="location_id">Địa điểm</label></th>
-                            <td>
-                                <select name="location_id" id="location_id" required>
-                                    <option value="">-- Chọn địa điểm --</option>
-                                    <?php foreach ($locations as $location) : ?>
-                                        <option value="<?php echo esc_attr($location['location_id']); ?>" <?php selected($vehicle_to_edit && $vehicle_to_edit['location_id'] == $location['location_id']); ?>>
-                                            <?php echo esc_html($location['name']); ?>
-                                        </option>
-                                    <?php endforeach; ?>
-                                </select>
-                            </td>
-                        </tr>
-                        <tr>
-                            <th><label for="status">Trạng thái</label></th>
-                            <td>
-                                <select name="status" id="status" required>
-                                    <option value="Active" <?php selected($vehicle_to_edit && $vehicle_to_edit['status'] == 'Active'); ?>>Hoạt động</option>
-                                    <option value="Inactive" <?php selected($vehicle_to_edit && $vehicle_to_edit['status'] == 'Inactive'); ?>>Không hoạt động</option>
-                                </select>
-                            </td>
-                        </tr>
-                        <tr>
-                            <th><label for="image">Hình ảnh xe</label></th>
-                            <td>
-                                <input type="text" name="image" id="image" value="<?php echo $vehicle_to_edit ? esc_attr($vehicle_to_edit['image']) : ''; ?>">
-                                <input type="button" class="button nhaxe-upload-button" value="Chọn hình ảnh">
-                                <div class="nhaxe-image-preview">
-                                    <?php if ($vehicle_to_edit && $vehicle_to_edit['image']) : ?>
-                                        <img src="<?php echo esc_url($vehicle_to_edit['image']); ?>" alt="Hình ảnh xe" style="max-width: 200px; margin-top: 10px;">
-                                    <?php endif; ?>
-                                </div>
-                            </td>
-                        </tr>
-                        <tr>
-                            <th><label for="note">Ghi chú</label></th>
-                            <td><textarea name="note" id="note" rows="4"><?php echo $vehicle_to_edit ? esc_html($vehicle_to_edit['note']) : ''; ?></textarea></td>
-                        </tr>
-                    </table>
-                    <p class="submit">
-                        <input type="submit" class="button nhaxe-button-primary" value="<?php echo $vehicle_to_edit ? 'Cập nhật Xe' : 'Thêm Xe'; ?>">
-                        <button type="button" class="button nhaxe-button-cancel nhaxe-toggle-form">Hủy</button>
-                    </p>
-                </form>
+                    </thead>
+                    <tbody class="divide-y divide-gray-200">
+                        <?php if (empty($vehicles)) : ?>
+                            <tr>
+                                <td colspan="8" class="px-4 py-3 text-sm text-gray-500 text-center">Không có xe nào phù hợp với tiêu chí.</td>
+                            </tr>
+                        <?php else : ?>
+                            <?php foreach ($vehicles as $vehicle) : ?>
+                                <tr class="hover:bg-gray-50" data-vehicle-id="<?php echo esc_attr($vehicle['vehicle_id']); ?>">
+                                    <td class="px-4 py-3 text-sm text-gray-900"><?php echo esc_html($vehicle['license_plate']); ?></td>
+                                    <td class="px-4 py-3 text-sm text-gray-900"><?php echo esc_html($vehicle['type']); ?></td>
+                                    <td class="px-4 py-3 text-sm text-gray-900"><?php echo esc_html($vehicle['capacity']); ?></td>
+                                    <td class="px-4 py-3 text-sm text-gray-900"><?php echo esc_html($vehicle['location_name'] ?: 'Chưa có'); ?></td>
+                                    <td class="px-4 py-3 text-sm text-gray-900">
+                                        <?php if ($vehicle['image']) : ?>
+                                            <img src="<?php echo esc_url($vehicle['image']); ?>" alt="Hình ảnh xe" class="max-w-[100px] rounded-lg" />
+                                        <?php endif; ?>
+                                    </td>
+                                    <td class="px-4 py-3 text-sm text-gray-900">
+                                        <select class="nhaxe-status-select border border-gray-300 rounded-lg px-2 py-1" data-vehicle-id="<?php echo esc_attr($vehicle['vehicle_id']); ?>">
+                                            <option value="Active" <?php selected($vehicle['status'], 'Active'); ?>>Hoạt động</option>
+                                            <option value="Inactive" <?php selected($vehicle['status'], 'Inactive'); ?>>Không hoạt động</option>
+                                        </select>
+                                    </td>
+                                    <td class="px-4 py-3 text-sm text-gray-900"><?php echo esc_html($vehicle['note']); ?></td>
+                                    <td class="px-4 py-3 text-sm text-gray-900">
+                                        <button class="bg-blue-600 text-white px-3 py-1 rounded-lg hover:bg-blue-700 transition mr-2 nhaxe-toggle-form" data-action="edit" data-vehicle-id="<?php echo esc_attr($vehicle['vehicle_id']); ?>">Sửa</button>
+                                        <button class="bg-red-600 text-white px-3 py-1 rounded-lg hover:bg-red-700 transition nhaxe-delete-vehicle" data-vehicle-id="<?php echo esc_attr($vehicle['vehicle_id']); ?>" data-nonce="<?php echo wp_create_nonce('nhaxemyduyen_delete_vehicle'); ?>">Xóa</button>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                    </tbody>
+                </table>
             </div>
-
-            <!-- Danh sách xe -->
-            <table class="widefat nhaxe-table">
-                <thead>
-                    <tr>
-                        <th>Biển số xe</th>
-                        <th>Loại xe</th>
-                        <th>Số chỗ</th>
-                        <th>Địa điểm</th>
-                        <th>Hình ảnh xe</th>
-                        <th>Trạng thái</th>
-                        <th>Ghi chú</th>
-                        <th>Hành động</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php foreach ($vehicles as $vehicle) : ?>
-                        <tr>
-                            <td><?php echo esc_html($vehicle['license_plate']); ?></td>
-                            <td><?php echo esc_html($vehicle['type']); ?></td>
-                            <td><?php echo esc_html($vehicle['capacity']); ?></td>
-                            <td><?php echo esc_html($vehicle['location_name'] ?: 'Chưa có'); ?></td>
-                            <td>
-                                <?php if ($vehicle['image']) : ?>
-                                    <img src="<?php echo esc_url($vehicle['image']); ?>" alt="Hình ảnh xe" style="max-width: 100px;">
-                                <?php endif; ?>
-                            </td>
-                            <td>
-                                <form method="post" action="">
-                                    <?php wp_nonce_field('nhaxemyduyen_vehicle_status', 'nhaxemyduyen_status_nonce'); ?>
-                                    <input type="hidden" name="nhaxemyduyen_vehicle_status" value="update">
-                                    <input type="hidden" name="vehicle_id" value="<?php echo esc_attr($vehicle['vehicle_id']); ?>">
-                                    <select name="status" onchange="this.form.submit()" class="nhaxe-select">
-                                        <option value="Active" <?php selected($vehicle['status'], 'Active'); ?>>Hoạt động</option>
-                                        <option value="Inactive" <?php selected($vehicle['status'], 'Inactive'); ?>>Không hoạt động</option>
-                                    </select>
-                                </form>
-                            </td>
-                            <td><?php echo esc_html($vehicle['note']); ?></td>
-                            <td>
-                                <!-- Form cho hành động Sửa -->
-                                <form method="post" action="" style="display:inline;">
-                                    <?php wp_nonce_field('nhaxemyduyen_edit_vehicle', 'nhaxemyduyen_edit_nonce'); ?>
-                                    <input type="hidden" name="nhaxemyduyen_edit_vehicle" value="edit">
-                                    <input type="hidden" name="vehicle_id" value="<?php echo esc_attr($vehicle['vehicle_id']); ?>">
-                                    <button type="submit" class="nhaxe-button nhaxe-button-edit">Sửa</button>
-                                </form>
-                                <!-- Form cho hành động Xóa -->
-                                <form method="post" action="" style="display:inline;">
-                                    <?php wp_nonce_field('nhaxemyduyen_delete_vehicle', 'nhaxemyduyen_delete_nonce'); ?>
-                                    <input type="hidden" name="nhaxemyduyen_delete_vehicle" value="delete">
-                                    <input type="hidden" name="vehicle_id" value="<?php echo esc_attr($vehicle['vehicle_id']); ?>">
-                                    <button type="submit" class="nhaxe-button nhaxe-button-delete" onclick="return confirm('Bạn có chắc chắn muốn xóa?')">Xóa</button>
-                                </form>
-                            </td>
-                        </tr>
-                    <?php endforeach; ?>
-                    <?php if (empty($vehicles)) : ?>
-                        <tr>
-                            <td colspan="8">Không có xe nào phù hợp với tiêu chí.</td>
-                        </tr>
-                    <?php endif; ?>
-                </tbody>
-            </table>
         </div>
     </div>
 
+    <style>
+        .nhaxe-add-form.hidden { display: none; }
+        table th, table td { white-space: nowrap; }
+        .nhaxe-image-preview img { max-width: 200px; border-radius: 0.5rem; }
+        .ui-datepicker {
+            background: #fff;
+            border: 1px solid #d1d5db;
+            border-radius: 0.5rem;
+            padding: 0.5rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .ui-datepicker-header { background: #f3f4f6; border-radius: 0.25rem; }
+        .ui-datepicker-title { font-weight: 600; color: #1f2937; }
+        .ui-datepicker-prev, .ui-datepicker-next { cursor: pointer; color: #2563eb; }
+        .ui-datepicker-prev:hover, .ui-datepicker-next:hover { background: #e5e7eb; }
+        .ui-datepicker-calendar td a { text-align: center; padding: 0.25rem; border-radius: 0.25rem; color: #1f2937; }
+        .ui-datepicker-calendar td a:hover { background: #e5e7eb; }
+        .ui-state-highlight, .ui-widget-content .ui-state-highlight { background: #2563eb; color: #fff; border-radius: 0.25rem; }
+        @media (max-width: 640px) {
+            .sm\:flex-row { flex-direction: column; }
+            .sm\:space-x-4 { space-x: 0; space-y: 4px; }
+        }
+    </style>
+
     <script>
         jQuery(document).ready(function($) {
-            // Script để hiển thị/ẩn form thêm
-            $('.nhaxe-toggle-form').click(function() {
-                $('.nhaxe-add-form').slideToggle(300);
+            // Toggle form thêm/sửa
+            $(document).on('click', '.nhaxe-toggle-form', function() {
+                var action = $(this).data('action');
+                var vehicleId = $(this).data('vehicle-id');
+
+                if (action === 'add') {
+                    $('#vehicle_action').val('add');
+                    $('#vehicle_id').val('');
+                    $('#license_plate').val('');
+                    $('#type').val('');
+                    $('#capacity').val('');
+                    $('#location_id').val('');
+                    $('#status').val('Active');
+                    $('#image').val('');
+                    $('#note').val('');
+                    $('.nhaxe-image-preview').html('');
+                    $('#submit-vehicle').text('Thêm Xe');
+                    $('.nhaxe-add-form').removeClass('hidden');
+                } else if (action === 'edit' && vehicleId) {
+                    $.ajax({
+                        url: ajaxurl,
+                        type: 'POST',
+                        data: {
+                            action: 'nhaxemyduyen_get_vehicle',
+                            vehicle_id: vehicleId,
+                            nonce: '<?php echo wp_create_nonce('nhaxemyduyen_get_vehicle'); ?>'
+                        },
+                        success: function(response) {
+                            if (response.success) {
+                                var vehicle = response.data;
+                                $('#vehicle_action').val('edit');
+                                $('#vehicle_id').val(vehicle.vehicle_id);
+                                $('#license_plate').val(vehicle.license_plate);
+                                $('#type').val(vehicle.type);
+                                $('#capacity').val(vehicle.capacity);
+                                $('#location_id').val(vehicle.location_id);
+                                $('#status').val(vehicle.status);
+                                $('#image').val(vehicle.image);
+                                $('#note').val(vehicle.note);
+                                $('.nhaxe-image-preview').html(vehicle.image ? '<img src="' + vehicle.image + '" alt="Hình ảnh xe" class="max-w-[200px] rounded-lg">' : '');
+                                $('#submit-vehicle').text('Cập nhật Xe');
+                                $('.nhaxe-add-form').removeClass('hidden');
+                            } else {
+                                $('#nhaxe-message').html('<div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6 rounded-lg"><p>' + response.data.message + '</p></div>');
+                            }
+                        },
+                        error: function(xhr) {
+                            $('#nhaxe-message').html('<div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6 rounded-lg"><p>Đã có lỗi xảy ra: ' + xhr.statusText + '</p></div>');
+                        }
+                    });
+                } else {
+                    $('.nhaxe-add-form').addClass('hidden');
+                }
             });
 
-            // Script cho Media Uploader
+            // Media Uploader
             $('.nhaxe-upload-button').click(function(e) {
                 e.preventDefault();
                 var image = wp.media({
@@ -3162,12 +3705,325 @@ function nhaxemyduyen_manage_vehicles() {
                     var uploaded_image = image.state().get('selection').first();
                     var image_url = uploaded_image.toJSON().url;
                     $('#image').val(image_url);
-                    $('.nhaxe-image-preview').html('<img src="' + image_url + '" alt="Hình ảnh xe" style="max-width: 200px; margin-top: 10px;">');
+                    $('.nhaxe-image-preview').html('<img src="' + image_url + '" alt="Hình ảnh xe" class="max-w-[200px] rounded-lg">');
                 });
             });
+
+            // Submit form thêm/sửa xe qua AJAX
+            $('#vehicle-form').submit(function(e) {
+                e.preventDefault();
+                var formData = $(this).serialize();
+
+                $.ajax({
+                    url: ajaxurl,
+                    type: 'POST',
+                    data: formData + '&action=nhaxemyduyen_manage_vehicle',
+                    success: function(response) {
+                        if (response.success) {
+                            $('#nhaxe-message').html('<div class="bg-green-100 border-l-4 border-green-500 text-green-700 p-4 mb-6 rounded-lg"><p>' + response.data.message + '</p></div>');
+                            $('.nhaxe-add-form').addClass('hidden');
+                            refreshVehiclesTable();
+                        } else {
+                            $('#nhaxe-message').html('<div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6 rounded-lg"><p>' + response.data.message + '</p></div>');
+                        }
+                    },
+                    error: function(xhr) {
+                        $('#nhaxe-message').html('<div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6 rounded-lg"><p>Đã có lỗi xảy ra: ' + xhr.statusText + '</p></div>');
+                    }
+                });
+            });
+
+            // Xóa xe qua AJAX
+            $(document).on('click', '.nhaxe-delete-vehicle', function() {
+                if (!confirm('Bạn có chắc chắn muốn xóa?')) return;
+
+                var vehicleId = $(this).data('vehicle-id');
+                var nonce = $(this).data('nonce');
+
+                $.ajax({
+                    url: ajaxurl,
+                    type: 'POST',
+                    data: {
+                        action: 'nhaxemyduyen_delete_vehicle',
+                        vehicle_id: vehicleId,
+                        nhaxemyduyen_delete_nonce: nonce
+                    },
+                    success: function(response) {
+                        if (response.success) {
+                            $('#nhaxe-message').html('<div class="bg-green-100 border-l-4 border-green-500 text-green-700 p-4 mb-6 rounded-lg"><p>' + response.data.message + '</p></div>');
+                            refreshVehiclesTable();
+                        } else {
+                            $('#nhaxe-message').html('<div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6 rounded-lg"><p>' + response.data.message + '</p></div>');
+                        }
+                    },
+                    error: function(xhr) {
+                        $('#nhaxe-message').html('<div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6 rounded-lg"><p>Đã có lỗi xảy ra: ' + xhr.statusText + '</p></div>');
+                    }
+                });
+            });
+
+            // Cập nhật trạng thái qua AJAX
+            $(document).on('change', '.nhaxe-status-select', function() {
+                var vehicleId = $(this).data('vehicle-id');
+                var status = $(this).val();
+
+                $.ajax({
+                    url: ajaxurl,
+                    type: 'POST',
+                    data: {
+                        action: 'nhaxemyduyen_update_vehicle_status',
+                        vehicle_id: vehicleId,
+                        status: status,
+                        nonce: '<?php echo wp_create_nonce('nhaxemyduyen_update_vehicle_status'); ?>'
+                    },
+                    success: function(response) {
+                        if (response.success) {
+                            $('#nhaxe-message').html('<div class="bg-green-100 border-l-4 border-green-500 text-green-700 p-4 mb-6 rounded-lg"><p>' + response.data.message + '</p></div>');
+                            refreshVehiclesTable();
+                        } else {
+                            $('#nhaxe-message').html('<div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6 rounded-lg"><p>' + response.data.message + '</p></div>');
+                        }
+                    },
+                    error: function(xhr) {
+                        $('#nhaxe-message').html('<div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6 rounded-lg"><p>Đã có lỗi xảy ra: ' + xhr.statusText + '</p></div>');
+                    }
+                });
+            });
+
+            // Lọc danh sách xe qua AJAX
+            $('#filter-form').submit(function(e) {
+                e.preventDefault();
+                var formData = $(this).serialize();
+
+                $.ajax({
+                    url: ajaxurl,
+                    type: 'POST',
+                    data: formData + '&action=nhaxemyduyen_filter_vehicles',
+                    success: function(response) {
+                        if (response.success) {
+                            $('#vehicles-table tbody').html(response.data.html);
+                        } else {
+                            $('#nhaxe-message').html('<div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6 rounded-lg"><p>' + response.data.message + '</p></div>');
+                        }
+                    },
+                    error: function(xhr) {
+                        $('#nhaxe-message').html('<div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6 rounded-lg"><p>Đã có lỗi xảy ra: ' + xhr.statusText + '</p></div>');
+                    }
+                });
+            });
+
+            // Hàm làm mới bảng xe
+            function refreshVehiclesTable() {
+                var formData = $('#filter-form').serialize();
+                $.ajax({
+                    url: ajaxurl,
+                    type: 'POST',
+                    data: formData + '&action=nhaxemyduyen_filter_vehicles',
+                    success: function(response) {
+                        if (response.success) {
+                            $('#vehicles-table tbody').html(response.data.html);
+                        } else {
+                            $('#nhaxe-message').html('<div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6 rounded-lg"><p>' + response.data.message + '</p></div>');
+                        }
+                    },
+                    error: function(xhr) {
+                        $('#nhaxe-message').html('<div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6 rounded-lg"><p>Đã có lỗi xảy ra: ' + xhr.statusText + '</p></div>');
+                    }
+                });
+            }
         });
     </script>
     <?php
+}
+
+// AJAX lấy dữ liệu xe
+add_action('wp_ajax_nhaxemyduyen_get_vehicle', 'nhaxemyduyen_get_vehicle_callback');
+function nhaxemyduyen_get_vehicle_callback() {
+    check_ajax_referer('nhaxemyduyen_get_vehicle', 'nonce');
+
+    global $wpdb;
+    $table_vehicles = $wpdb->prefix . 'vehicles';
+    $vehicle_id = intval($_POST['vehicle_id']);
+
+    $vehicle = $wpdb->get_row($wpdb->prepare("SELECT * FROM $table_vehicles WHERE vehicle_id = %d", $vehicle_id), ARRAY_A);
+
+    if ($vehicle) {
+        wp_send_json_success($vehicle);
+    } else {
+        wp_send_json_error(['message' => 'Không tìm thấy xe.']);
+    }
+}
+
+// AJAX thêm/sửa xe
+add_action('wp_ajax_nhaxemyduyen_manage_vehicle', 'nhaxemyduyen_manage_vehicle_callback');
+function nhaxemyduyen_manage_vehicle_callback() {
+    check_ajax_referer('nhaxemyduyen_vehicle_action', 'nhaxemyduyen_vehicle_nonce');
+
+    global $wpdb;
+    $table_vehicles = $wpdb->prefix . 'vehicles';
+
+    $action = sanitize_text_field($_POST['nhaxemyduyen_vehicle_action']);
+    $vehicle_id = isset($_POST['vehicle_id']) ? intval($_POST['vehicle_id']) : 0;
+    $license_plate = sanitize_text_field($_POST['license_plate']);
+    $type = sanitize_text_field($_POST['type']);
+    $capacity = intval($_POST['capacity']);
+    $location_id = intval($_POST['location_id']);
+    $status = sanitize_text_field($_POST['status']);
+    $image = isset($_POST['image']) ? sanitize_text_field($_POST['image']) : '';
+    $note = sanitize_textarea_field($_POST['note']);
+
+    // Validate required fields
+    if (empty($license_plate) || empty($type) || empty($capacity) || empty($location_id) || empty($status)) {
+        wp_send_json_error(['message' => 'Vui lòng điền đầy đủ các trường bắt buộc.']);
+    }
+
+    if ($capacity <= 0) {
+        wp_send_json_error(['message' => 'Số chỗ phải lớn hơn 0.']);
+    }
+
+    // Validate image URL if provided
+    if (!empty($image) && !filter_var($image, FILTER_VALIDATE_URL)) {
+        wp_send_json_error(['message' => 'URL hình ảnh không hợp lệ.']);
+    }
+
+    $vehicle_data = [
+        'license_plate' => $license_plate,
+        'type' => $type,
+        'capacity' => $capacity,
+        'location_id' => $location_id,
+        'status' => $status,
+        'image' => $image,
+        'note' => $note,
+        'updated_at' => current_time('mysql'),
+    ];
+
+    if ($action === 'add') {
+        $vehicle_data['created_at'] = current_time('mysql');
+        $result = $wpdb->insert($table_vehicles, $vehicle_data);
+        if ($result === false) {
+            wp_send_json_error(['message' => 'Lỗi khi thêm xe: ' . esc_html($wpdb->last_error)]);
+        } else {
+            wp_send_json_success(['message' => 'Thêm xe thành công!']);
+        }
+    } elseif ($action === 'edit' && $vehicle_id) {
+        $result = $wpdb->update($table_vehicles, $vehicle_data, ['vehicle_id' => $vehicle_id]);
+        if ($result === false) {
+            wp_send_json_error(['message' => 'Lỗi khi cập nhật xe: ' . esc_html($wpdb->last_error)]);
+        } else {
+            wp_send_json_success(['message' => 'Cập nhật xe thành công!']);
+        }
+    } else {
+        wp_send_json_error(['message' => 'Hành động không hợp lệ.']);
+    }
+}
+
+// AJAX xóa xe
+add_action('wp_ajax_nhaxemyduyen_delete_vehicle', 'nhaxemyduyen_delete_vehicle_callback');
+function nhaxemyduyen_delete_vehicle_callback() {
+    check_ajax_referer('nhaxemyduyen_delete_vehicle', 'nhaxemyduyen_delete_nonce');
+
+    global $wpdb;
+    $table_vehicles = $wpdb->prefix . 'vehicles';
+    $vehicle_id = intval($_POST['vehicle_id']);
+
+    $result = $wpdb->delete($table_vehicles, ['vehicle_id' => $vehicle_id]);
+    if ($result === false) {
+        wp_send_json_error(['message' => 'Lỗi khi xóa xe: ' . esc_html($wpdb->last_error)]);
+    } else {
+        wp_send_json_success(['message' => 'Xóa xe thành công!']);
+    }
+}
+
+// AJAX cập nhật trạng thái xe
+add_action('wp_ajax_nhaxemyduyen_update_vehicle_status', 'nhaxemyduyen_update_vehicle_status_callback');
+function nhaxemyduyen_update_vehicle_status_callback() {
+    check_ajax_referer('nhaxemyduyen_update_vehicle_status', 'nonce');
+
+    global $wpdb;
+    $table_vehicles = $wpdb->prefix . 'vehicles';
+    $vehicle_id = intval($_POST['vehicle_id']);
+    $status = sanitize_text_field($_POST['status']);
+
+    $result = $wpdb->update($table_vehicles, ['status' => $status, 'updated_at' => current_time('mysql')], ['vehicle_id' => $vehicle_id]);
+    if ($result === false) {
+        wp_send_json_error(['message' => 'Lỗi khi cập nhật trạng thái: ' . esc_html($wpdb->last_error)]);
+    } else {
+        wp_send_json_success(['message' => 'Cập nhật trạng thái thành công!']);
+    }
+}
+
+// AJAX lọc xe
+add_action('wp_ajax_nhaxemyduyen_filter_vehicles', 'nhaxemyduyen_filter_vehicles_callback');
+function nhaxemyduyen_filter_vehicles_callback() {
+    global $wpdb;
+    $table_vehicles = $wpdb->prefix . 'vehicles';
+    $table_locations = $wpdb->prefix . 'locations';
+
+    $filter_license_plate = isset($_POST['filter_license_plate']) ? sanitize_text_field($_POST['filter_license_plate']) : '';
+    $filter_type = isset($_POST['filter_type']) ? sanitize_text_field($_POST['filter_type']) : '';
+    $filter_location = isset($_POST['filter_location']) ? intval($_POST['filter_location']) : 0;
+
+    $where_conditions = [];
+    if (!empty($filter_license_plate)) {
+        $where_conditions[] = $wpdb->prepare("v.license_plate LIKE %s", '%' . $filter_license_plate . '%');
+    }
+    if (!empty($filter_type)) {
+        $where_conditions[] = $wpdb->prepare("v.type LIKE %s", '%' . $filter_type . '%');
+    }
+    if ($filter_location > 0) {
+        $where_conditions[] = $wpdb->prepare("v.location_id = %d", $filter_location);
+    }
+
+    $where_clause = '';
+    if (!empty($where_conditions)) {
+        $where_clause = " WHERE " . implode(' AND ', $where_conditions);
+    }
+
+    $vehicles = $wpdb->get_results("
+        SELECT v.*, l.name as location_name
+        FROM $table_vehicles v
+        LEFT JOIN $table_locations l ON v.location_id = l.location_id
+        $where_clause
+        ORDER BY v.created_at DESC
+    ", ARRAY_A);
+
+    if ($wpdb->last_error) {
+        wp_send_json_error(['message' => 'Lỗi truy vấn danh sách xe: ' . esc_html($wpdb->last_error)]);
+    }
+
+    ob_start();
+    if (empty($vehicles)) {
+        echo '<tr><td colspan="8" class="px-4 py-3 text-sm text-gray-500 text-center">Không có xe nào phù hợp với tiêu chí.</td></tr>';
+    } else {
+        foreach ($vehicles as $vehicle) {
+            ?>
+            <tr class="hover:bg-gray-50" data-vehicle-id="<?php echo esc_attr($vehicle['vehicle_id']); ?>">
+                <td class="px-4 py-3 text-sm text-gray-900"><?php echo esc_html($vehicle['license_plate']); ?></td>
+                <td class="px-4 py-3 text-sm text-gray-900"><?php echo esc_html($vehicle['type']); ?></td>
+                <td class="px-4 py-3 text-sm text-gray-900"><?php echo esc_html($vehicle['capacity']); ?></td>
+                <td class="px-4 py-3 text-sm text-gray-900"><?php echo esc_html($vehicle['location_name'] ?: 'Chưa có'); ?></td>
+                <td class="px-4 py-3 text-sm text-gray-900">
+                    <?php if ($vehicle['image']) : ?>
+                        <img src="<?php echo esc_url($vehicle['image']); ?>" alt="Hình ảnh xe" class="max-w-[100px] rounded-lg" />
+                    <?php endif; ?>
+                </td>
+                <td class="px-4 py-3 text-sm text-gray-900">
+                    <select class="nhaxe-status-select border border-gray-300 rounded-lg px-2 py-1" data-vehicle-id="<?php echo esc_attr($vehicle['vehicle_id']); ?>">
+                        <option value="Active" <?php selected($vehicle['status'], 'Active'); ?>>Hoạt động</option>
+                        <option value="Inactive" <?php selected($vehicle['status'], 'Inactive'); ?>>Không hoạt động</option>
+                    </select>
+                </td>
+                <td class="px-4 py-3 text-sm text-gray-900"><?php echo esc_html($vehicle['note']); ?></td>
+                <td class="px-4 py-3 text-sm text-gray-900">
+                    <button class="bg-blue-600 text-white px-3 py-1 rounded-lg hover:bg-blue-700 transition mr-2 nhaxe-toggle-form" data-action="edit" data-vehicle-id="<?php echo esc_attr($vehicle['vehicle_id']); ?>">Sửa</button>
+                    <button class="bg-red-600 text-white px-3 py-1 rounded-lg hover:bg-red-700 transition nhaxe-delete-vehicle" data-vehicle-id="<?php echo esc_attr($vehicle['vehicle_id']); ?>" data-nonce="<?php echo wp_create_nonce('nhaxemyduyen_delete_vehicle'); ?>">Xóa</button>
+                </td>
+            </tr>
+            <?php
+        }
+    }
+    $html = ob_get_clean();
+    wp_send_json_success(['html' => $html]);
 }
 
 // Đăng ký style cho giao diện admin
@@ -3432,6 +4288,66 @@ function nhaxemyduyen_admin_styles($hook) {
     </style>
     <?php
 }
+
+function create_contact_post_type() {
+    register_post_type('contact_message', array(
+        'labels' => array(
+            'name' => __('Contact Messages'),
+            'singular_name' => __('Contact Message')
+        ),
+        'public' => false,
+        'show_ui' => true,
+        'supports' => array('title', 'editor'),
+        'show_in_rest' => true,
+    ));
+}
+add_action('init', 'create_contact_post_type');
+
+// Tạo endpoint REST API tùy chỉnh
+add_action('rest_api_init', function () {
+    register_rest_route('custom/v1', '/contact', array(
+        'methods' => 'POST',
+        'callback' => 'handle_contact_submission',
+        'permission_callback' => '__return_true', // Cho phép tất cả người dùng gửi
+    ));
+});
+
+// Xử lý gửi tin nhắn và lưu vào custom post type
+function handle_contact_submission($request) {
+    $params = $request->get_json_params();
+    $name = sanitize_text_field($params['name']);
+    $phone = sanitize_text_field($params['phone']);
+    $email = sanitize_email($params['email']);
+    $message = sanitize_textarea_field($params['message']);
+
+    if (empty($name) || empty($phone) || empty($email) || empty($message)) {
+        return new WP_Error('missing_data', 'Vui lòng điền đầy đủ thông tin.', array('status' => 400));
+    }
+
+    // Tạo bài viết mới trong custom post type
+    $post_data = array(
+        'post_title' => 'Tin nhắn từ ' . $name,
+        'post_content' => "Họ tên: $name\nSố điện thoại: $phone\nEmail: $email\nNội dung: $message",
+        'post_status' => 'publish',
+        'post_type' => 'contact_message',
+    );
+
+    $post_id = wp_insert_post($post_data);
+
+    if ($post_id && !is_wp_error($post_id)) {
+        // Gửi email thông báo cho admin (tùy chọn)
+        $to = get_option('admin_email');
+        $subject = 'Tin nhắn mới từ ' . $name;
+        $body = "Họ tên: $name\nSố điện thoại: $phone\nEmail: $email\nNội dung: $message";
+        wp_mail($to, $subject, $body);
+
+        return new WP_Rest_Response('Tin nhắn đã được gửi thành công!', 200);
+    } else {
+        return new WP_Error('save_error', 'Đã xảy ra lỗi khi lưu tin nhắn.', array('status' => 500));
+    }
+}
+
+
     require_once plugin_dir_path(__FILE__) . 'inc/location-api.php';
     require_once plugin_dir_path(__FILE__) . 'inc/route-api.php';
     require_once plugin_dir_path(__FILE__) . 'inc/trip-api.php';

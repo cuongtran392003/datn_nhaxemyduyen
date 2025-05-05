@@ -139,13 +139,13 @@ function PaymentStatus() {
           <div className="flex justify-center gap-4">
             <button
               onClick={() => navigate("/tickets")}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-bluecustom transition-colors"
             >
-              Xem đơn hàng
+              Tra cứu vé
             </button>
             <button
               onClick={() => navigate("/search")}
-              className="px-4 py-2 bg-gray-400 text-white rounded-lg hover:bg-gray-500 transition-colors"
+              className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-bluecustom transition-colors"
             >
               Tìm chuyến xe khác
             </button>
@@ -168,7 +168,7 @@ function PaymentStatus() {
               onClick={() => navigate("/tickets")}
               className="px-4 py-2 bg-gray-400 text-white rounded-lg hover:bg-gray-500 transition-colors"
             >
-              Xem đơn hàng
+              Tra cứu vé
             </button>
           </div>
         </div>
