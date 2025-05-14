@@ -69,6 +69,7 @@ class Ticket_API {
         global $wpdb;
         $table_tickets = $wpdb->prefix . 'tickets';
         $table_trips = $wpdb->prefix . 'trips';
+        $table_routes = $wpdb->prefix . 'routes';
         $table_locations = $wpdb->prefix . 'locations';
         $table_drivers = $wpdb->prefix . 'drivers';
         $table_vehicles = $wpdb->prefix . 'vehicles';
@@ -79,8 +80,9 @@ class Ticket_API {
                    d.name as driver_name, v.license_plate as vehicle_plate
             FROM $table_tickets t
             JOIN $table_trips tr ON t.trip_id = tr.trip_id
-            JOIN $table_locations l1 ON tr.from_location_id = l1.location_id
-            JOIN $table_locations l2 ON tr.to_location_id = l2.location_id
+            JOIN $table_routes r ON tr.route_id = r.route_id
+            LEFT JOIN $table_locations l1 ON r.from_location_id = l1.location_id
+            LEFT JOIN $table_locations l2 ON r.to_location_id = l2.location_id
             LEFT JOIN $table_drivers d ON tr.driver_id = d.driver_id
             LEFT JOIN $table_vehicles v ON tr.vehicle_id = v.vehicle_id
         ", ARRAY_A);
@@ -99,6 +101,7 @@ class Ticket_API {
         global $wpdb;
         $table_tickets = $wpdb->prefix . 'tickets';
         $table_trips = $wpdb->prefix . 'trips';
+        $table_routes = $wpdb->prefix . 'routes';
         $table_locations = $wpdb->prefix . 'locations';
         $table_drivers = $wpdb->prefix . 'drivers';
         $table_vehicles = $wpdb->prefix . 'vehicles';
@@ -110,8 +113,9 @@ class Ticket_API {
                    d.name as driver_name, v.license_plate as vehicle_plate
             FROM $table_tickets t
             JOIN $table_trips tr ON t.trip_id = tr.trip_id
-            JOIN $table_locations l1 ON tr.from_location_id = l1.location_id
-            JOIN $table_locations l2 ON tr.to_location_id = l2.location_id
+            JOIN $table_routes r ON tr.route_id = r.route_id
+            LEFT JOIN $table_locations l1 ON r.from_location_id = l1.location_id
+            LEFT JOIN $table_locations l2 ON r.to_location_id = l2.location_id
             LEFT JOIN $table_drivers d ON tr.driver_id = d.driver_id
             LEFT JOIN $table_vehicles v ON tr.vehicle_id = v.vehicle_id
             WHERE t.ticket_id = %d
@@ -131,13 +135,12 @@ class Ticket_API {
         global $wpdb;
         $table_tickets = $wpdb->prefix . 'tickets';
         $table_trips = $wpdb->prefix . 'trips';
+        $table_routes = $wpdb->prefix . 'routes';
         $table_locations = $wpdb->prefix . 'locations';
         $table_drivers = $wpdb->prefix . 'drivers';
         $table_vehicles = $wpdb->prefix . 'vehicles';
 
         $data = $request->get_json_params();
-
-        // Kiểm tra các trường bắt buộc
         $required_fields = ['ticket_code', 'customer_phone'];
         foreach ($required_fields as $field) {
             if (empty($data[$field])) {
@@ -148,27 +151,35 @@ class Ticket_API {
         $ticket_code = sanitize_text_field($data['ticket_code']);
         $customer_phone = sanitize_text_field($data['customer_phone']);
 
-        // Validate phone
         if (!preg_match('/^[0-9]{10,11}$/', $customer_phone)) {
             return new WP_Error('invalid_phone', 'Số điện thoại phải có 10-11 chữ số', array('status' => 400));
         }
 
-        // Tìm vé
-        $ticket = $wpdb->get_row($wpdb->prepare("
+        $query = $wpdb->prepare("
             SELECT t.*, tr.departure_time, tr.pickup_location as trip_pickup_location, tr.dropoff_location as trip_dropoff_location,
                    l1.name as from_location, l2.name as to_location, 
                    d.name as driver_name, v.license_plate as vehicle_plate
             FROM $table_tickets t
             JOIN $table_trips tr ON t.trip_id = tr.trip_id
-            JOIN $table_locations l1 ON tr.from_location_id = l1.location_id
-            JOIN $table_locations l2 ON tr.to_location_id = l2.location_id
+            JOIN $table_routes r ON tr.route_id = r.route_id
+            LEFT JOIN $table_locations l1 ON r.from_location_id = l1.location_id
+            LEFT JOIN $table_locations l2 ON r.to_location_id = l2.location_id
             LEFT JOIN $table_drivers d ON tr.driver_id = d.driver_id
             LEFT JOIN $table_vehicles v ON tr.vehicle_id = v.vehicle_id
             WHERE t.ticket_code = %s AND t.customer_phone = %s
-        ", $ticket_code, $customer_phone), ARRAY_A);
+        ", $ticket_code, $customer_phone);
+
+        error_log('check_ticket SQL query: ' . $query); // Ghi lại truy vấn chính xác
+
+        $ticket = $wpdb->get_row($query, ARRAY_A);
+
+        if ($wpdb->last_error) {
+            error_log('check_ticket SQL error: ' . $wpdb->last_error);
+            error_log('check_ticket Last query: ' . $wpdb->last_query);
+            return new WP_Error('db_error', 'Lỗi truy vấn cơ sở dữ liệu: ' . $wpdb->last_error, array('status' => 500));
+        }
 
         if ($ticket) {
-            // Chuẩn hóa dữ liệu để khớp với giao diện
             $ticket['start_location'] = $ticket['from_location'];
             $ticket['end_location'] = $ticket['to_location'];
             return new WP_REST_Response($ticket, 200);
@@ -181,118 +192,118 @@ class Ticket_API {
      * Tạo vé mới
      */
     public function create_ticket($request) {
-    global $wpdb;
-    $table_tickets = $wpdb->prefix . 'tickets';
-    $table_trips = $wpdb->prefix . 'trips';
-    $data = $request->get_json_params();
+        global $wpdb;
+        $table_tickets = $wpdb->prefix . 'tickets';
+        $table_trips = $wpdb->prefix . 'trips';
+        $data = $request->get_json_params();
 
-    // Kiểm tra các trường bắt buộc
-    $required_fields = ['trip_id', 'customer_name', 'customer_phone', 'seat_number', 'pickup_location', 'dropoff_location'];
-    foreach ($required_fields as $field) {
-        if (empty($data[$field])) {
-            return new WP_Error('invalid_data', "Thiếu trường bắt buộc: $field", array('status' => 400));
+        // Kiểm tra các trường bắt buộc
+        $required_fields = ['trip_id', 'customer_name', 'customer_phone', 'seat_number', 'pickup_location', 'dropoff_location'];
+        foreach ($required_fields as $field) {
+            if (empty($data[$field])) {
+                return new WP_Error('invalid_data', "Thiếu trường bắt buộc: $field", array('status' => 400));
+            }
+        }
+
+        // Validate email
+        if (!empty($data['customer_email']) && !is_email($data['customer_email'])) {
+            return new WP_Error('invalid_email', 'Email không hợp lệ', array('status' => 400));
+        }
+
+        // Validate phone
+        if (!preg_match('/^[0-9]{10,11}$/', $data['customer_phone'])) {
+            return new WP_Error('invalid_phone', 'Số điện thoại phải có 10-11 chữ số', array('status' => 400));
+        }
+
+        // Validate seat number
+        if (!preg_match('/^A[1-9][0-9]?$/', $data['seat_number']) || intval(substr($data['seat_number'], 1)) > 44) {
+            return new WP_Error('invalid_seat', 'Số ghế không hợp lệ (phải là A1-A44)', array('status' => 400));
+        }
+
+        // Bắt đầu giao dịch
+        $wpdb->query('START TRANSACTION');
+
+        try {
+            // Kiểm tra chuyến xe và ghế trống
+            $trip_id = intval($data['trip_id']);
+            $seat_number = sanitize_text_field($data['seat_number']);
+            $trip = $wpdb->get_row($wpdb->prepare("
+                SELECT available_seats, price, pickup_location, dropoff_location 
+                FROM $table_trips 
+                WHERE trip_id = %d
+                FOR UPDATE", // Khóa dòng để ngăn chặn race condition
+                $trip_id
+            ));
+
+            if (!$trip) {
+                throw new Exception('Chuyến xe không tồn tại', 404);
+            }
+            if ($trip->available_seats <= 0) {
+                throw new Exception('Chuyến xe không còn ghế trống', 400);
+            }
+
+            // Kiểm tra điểm đón và điểm trả
+            $pickup_location = sanitize_text_field($data['pickup_location']);
+            $dropoff_location = sanitize_text_field($data['dropoff_location']);
+            if ($pickup_location !== $trip->pickup_location || $dropoff_location !== $trip->dropoff_location) {
+                throw new Exception('Điểm đón hoặc điểm trả không khớp với chuyến xe', 400);
+            }
+
+            // Kiểm tra ghế đã được đặt
+            $seat_exists = $wpdb->get_var($wpdb->prepare("
+                SELECT COUNT(*) 
+                FROM $table_tickets 
+                WHERE trip_id = %d AND seat_number = %s", 
+                $trip_id, $seat_number
+            ));
+            if ($seat_exists > 0) {
+                throw new Exception('Ghế này đã được đặt', 400);
+            }
+
+            // Tạo mã vé
+            $ticket_code = 'TICKET-' . strtoupper(substr(md5(uniqid()), 0, 8));
+            $result = $wpdb->insert($table_tickets, array(
+                'ticket_code' => $ticket_code,
+                'trip_id' => $trip_id,
+                'customer_name' => sanitize_text_field($data['customer_name']),
+                'customer_phone' => sanitize_text_field($data['customer_phone']),
+                'customer_email' => sanitize_email($data['customer_email'] ?? ''),
+                'pickup_location' => $pickup_location,
+                'dropoff_location' => $dropoff_location,
+                'seat_number' => $seat_number,
+                'status' => sanitize_text_field($data['status'] ?? 'Chưa thanh toán'),
+                'note' => sanitize_text_field($data['note'] ?? ''),
+                'created_at' => current_time('mysql'),
+                'updated_at' => current_time('mysql'),
+            ));
+
+            if ($result === false) {
+                throw new Exception('Không thể tạo vé xe: ' . $wpdb->last_error, 500);
+            }
+
+            // Cập nhật số ghế trống
+            $wpdb->update(
+                $table_trips, 
+                array('available_seats' => $trip->available_seats - 1), 
+                array('trip_id' => $trip_id)
+            );
+
+            // Commit giao dịch
+            $wpdb->query('COMMIT');
+
+            return new WP_REST_Response(array(
+                'message' => 'Vé xe đã được tạo',
+                'ticket_id' => $wpdb->insert_id,
+                'ticket_code' => $ticket_code,
+                'seat_number' => $seat_number,
+                'price' => $trip->price,
+            ), 201);
+        } catch (Exception $e) {
+            // Rollback giao dịch nếu có lỗi
+            $wpdb->query('ROLLBACK');
+            return new WP_Error('error', $e->getMessage(), array('status' => $e->getCode() ?: 500));
         }
     }
-
-    // Validate email
-    if (!empty($data['customer_email']) && !is_email($data['customer_email'])) {
-        return new WP_Error('invalid_email', 'Email không hợp lệ', array('status' => 400));
-    }
-
-    // Validate phone
-    if (!preg_match('/^[0-9]{10,11}$/', $data['customer_phone'])) {
-        return new WP_Error('invalid_phone', 'Số điện thoại phải có 10-11 chữ số', array('status' => 400));
-    }
-
-    // Validate seat number
-    if (!preg_match('/^A[1-9][0-9]?$/', $data['seat_number']) || intval(substr($data['seat_number'], 1)) > 44) {
-        return new WP_Error('invalid_seat', 'Số ghế không hợp lệ (phải là A1-A44)', array('status' => 400));
-    }
-
-    // Bắt đầu giao dịch
-    $wpdb->query('START TRANSACTION');
-
-    try {
-        // Kiểm tra chuyến xe và ghế trống
-        $trip_id = intval($data['trip_id']);
-        $seat_number = sanitize_text_field($data['seat_number']);
-        $trip = $wpdb->get_row($wpdb->prepare("
-            SELECT available_seats, price, pickup_location, dropoff_location 
-            FROM $table_trips 
-            WHERE trip_id = %d
-            FOR UPDATE", // Khóa dòng để ngăn chặn race condition
-            $trip_id
-        ));
-
-        if (!$trip) {
-            throw new Exception('Chuyến xe không tồn tại', 404);
-        }
-        if ($trip->available_seats <= 0) {
-            throw new Exception('Chuyến xe không còn ghế trống', 400);
-        }
-
-        // Kiểm tra điểm đón và điểm trả
-        $pickup_location = sanitize_text_field($data['pickup_location']);
-        $dropoff_location = sanitize_text_field($data['dropoff_location']);
-        if ($pickup_location !== $trip->pickup_location || $dropoff_location !== $trip->dropoff_location) {
-            throw new Exception('Điểm đón hoặc điểm trả không khớp với chuyến xe', 400);
-        }
-
-        // Kiểm tra ghế đã được đặt
-        $seat_exists = $wpdb->get_var($wpdb->prepare("
-            SELECT COUNT(*) 
-            FROM $table_tickets 
-            WHERE trip_id = %d AND seat_number = %s", 
-            $trip_id, $seat_number
-        ));
-        if ($seat_exists > 0) {
-            throw new Exception('Ghế này đã được đặt', 400);
-        }
-
-        // Tạo mã vé
-        $ticket_code = 'TICKET-' . strtoupper(substr(md5(uniqid()), 0, 8));
-        $result = $wpdb->insert($table_tickets, array(
-            'ticket_code' => $ticket_code,
-            'trip_id' => $trip_id,
-            'customer_name' => sanitize_text_field($data['customer_name']),
-            'customer_phone' => sanitize_text_field($data['customer_phone']),
-            'customer_email' => sanitize_email($data['customer_email'] ?? ''),
-            'pickup_location' => $pickup_location,
-            'dropoff_location' => $dropoff_location,
-            'seat_number' => $seat_number,
-            'status' => sanitize_text_field($data['status'] ?? 'Chưa thanh toán'),
-            'note' => sanitize_text_field($data['note'] ?? ''),
-            'created_at' => current_time('mysql'),
-            'updated_at' => current_time('mysql'),
-        ));
-
-        if ($result === false) {
-            throw new Exception('Không thể tạo vé xe: ' . $wpdb->last_error, 500);
-        }
-
-        // Cập nhật số ghế trống
-        $wpdb->update(
-            $table_trips, 
-            array('available_seats' => $trip->available_seats - 1), 
-            array('trip_id' => $trip_id)
-        );
-
-        // Commit giao dịch
-        $wpdb->query('COMMIT');
-
-        return new WP_REST_Response(array(
-            'message' => 'Vé xe đã được tạo',
-            'ticket_id' => $wpdb->insert_id,
-            'ticket_code' => $ticket_code,
-            'seat_number' => $seat_number,
-            'price' => $trip->price,
-        ), 201);
-    } catch (Exception $e) {
-        // Rollback giao dịch nếu có lỗi
-        $wpdb->query('ROLLBACK');
-        return new WP_Error('error', $e->getMessage(), array('status' => $e->getCode() ?: 500));
-    }
-}
 
     /**
      * Cập nhật vé
@@ -438,6 +449,7 @@ class Ticket_API {
         global $wpdb;
         $table_tickets = $wpdb->prefix . 'tickets';
         $table_trips = $wpdb->prefix . 'trips';
+        $table_routes = $wpdb->prefix . 'routes';
         $table_locations = $wpdb->prefix . 'locations';
         $table_drivers = $wpdb->prefix . 'drivers';
         $table_vehicles = $wpdb->prefix . 'vehicles';
@@ -448,8 +460,9 @@ class Ticket_API {
             SELECT t.*, l1.name as from_location, l2.name as to_location, 
                    d.name as driver_name, v.license_plate as vehicle_plate
             FROM $table_trips t
-            JOIN $table_locations l1 ON t.from_location_id = l1.location_id
-            JOIN $table_locations l2 ON t.to_location_id = l2.location_id
+            JOIN $table_routes r ON t.route_id = r.route_id
+            LEFT JOIN $table_locations l1 ON r.from_location_id = l1.location_id
+            LEFT JOIN $table_locations l2 ON r.to_location_id = l2.location_id
             LEFT JOIN $table_drivers d ON t.driver_id = d.driver_id
             LEFT JOIN $table_vehicles v ON t.vehicle_id = v.vehicle_id
             WHERE t.trip_id = %d
@@ -493,107 +506,117 @@ class Ticket_API {
         ), 200);
     }
 
-    // Phương thức create_tickets_bulk
-public function create_tickets_bulk($request) {
-    global $wpdb;
-    $table_tickets = $wpdb->prefix . 'tickets';
-    $table_trips = $wpdb->prefix . 'trips';
-    $data = $request->get_json_params();
+    /**
+     * Tạo nhiều vé cùng lúc
+     */
+    public function create_tickets_bulk($request) {
+        global $wpdb;
+        $table_tickets = $wpdb->prefix . 'tickets';
+        $table_trips = $wpdb->prefix . 'trips';
+        $data = $request->get_json_params();
 
-    if (empty($data['tickets']) || !is_array($data['tickets'])) {
-        return new WP_Error('invalid_data', 'Danh sách vé không hợp lệ', array('status' => 400));
-    }
-
-    $wpdb->query('START TRANSACTION');
-
-    try {
-        $trip_id = intval($data['tickets'][0]['trip_id']);
-        $trip = $wpdb->get_row($wpdb->prepare("
-            SELECT available_seats, price, pickup_location, dropoff_location 
-            FROM $table_trips 
-            WHERE trip_id = %d
-            FOR UPDATE", 
-            $trip_id
-        ));
-
-        if (!$trip) {
-            throw new Exception('Chuyến xe không tồn tại', 404);
+        if (empty($data['tickets']) || !is_array($data['tickets'])) {
+            return new WP_Error('invalid_data', 'Danh sách vé không hợp lệ', array('status' => 400));
         }
 
-        if ($trip->available_seats < count($data['tickets'])) {
-            throw new Exception('Không đủ ghế trống cho số lượng vé yêu cầu', 400);
-        }
+        $wpdb->query('START TRANSACTION');
 
-        $ticket_results = [];
-        foreach ($data['tickets'] as $ticket_data) {
-            // Validate dữ liệu tương tự như create_ticket
-            $required_fields = ['trip_id', 'customer_name', 'customer_phone', 'seat_number', 'pickup_location', 'dropoff_location'];
-            foreach ($required_fields as $field) {
-                if (empty($ticket_data[$field])) {
-                    throw new Exception("Thiếu trường bắt buộc: $field", 400);
+        try {
+            $trip_id = intval($data['tickets'][0]['trip_id']);
+            $trip = $wpdb->get_row($wpdb->prepare("
+                SELECT available_seats, price, pickup_location, dropoff_location 
+                FROM $table_trips 
+                WHERE trip_id = %d
+                FOR UPDATE", 
+                $trip_id
+            ));
+
+            if (!$trip) {
+                throw new Exception('Chuyến xe không tồn tại', 404);
+            }
+
+            if ($trip->available_seats < count($data['tickets'])) {
+                throw new Exception('Không đủ ghế trống cho số lượng vé yêu cầu', 400);
+            }
+
+            $ticket_results = [];
+            foreach ($data['tickets'] as $ticket_data) {
+                // Validate dữ liệu tương tự như create_ticket
+                $required_fields = ['trip_id', 'customer_name', 'customer_phone', 'seat_number', 'pickup_location', 'dropoff_location'];
+                foreach ($required_fields as $field) {
+                    if (empty($ticket_data[$field])) {
+                        throw new Exception("Thiếu trường bắt buộc: $field", 400);
+                    }
                 }
+
+                // Validate email, phone, seat_number
+                if (!empty($ticket_data['customer_email']) && !is_email($ticket_data['customer_email'])) {
+                    throw new Exception('Email không hợp lệ', 400);
+                }
+                if (!preg_match('/^[0-9]{10,11}$/', $ticket_data['customer_phone'])) {
+                    throw new Exception('Số điện thoại phải có 10-11 chữ số', 400);
+                }
+                if (!preg_match('/^A[1-9][0-9]?$/', $ticket_data['seat_number']) || intval(substr($ticket_data['seat_number'], 1)) > 44) {
+                    throw new Exception('Số ghế không hợp lệ (phải là A1-A44)', 400);
+                }
+
+                $seat_number = sanitize_text_field($ticket_data['seat_number']);
+                $seat_exists = $wpdb->get_var($wpdb->prepare("
+                    SELECT COUNT(*) 
+                    FROM $table_tickets 
+                    WHERE trip_id = %d AND seat_number = %s", 
+                    $trip_id, $seat_number
+                ));
+                if ($seat_exists > 0) {
+                    throw new Exception("Ghế $seat_number đã được đặt", 400);
+                }
+
+                $ticket_code = 'TICKET-' . strtoupper(substr(md5(uniqid()), 0, 8));
+                $result = $wpdb->insert($table_tickets, array(
+                    'ticket_code' => $ticket_code,
+                    'trip_id' => $trip_id,
+                    'customer_name' => sanitize_text_field($ticket_data['customer_name']),
+                    'customer_phone' => sanitize_text_field($ticket_data['customer_phone']),
+                    'customer_email' => sanitize_email($ticket_data['customer_email'] ?? ''),
+                    'pickup_location' => sanitize_text_field($ticket_data['pickup_location']),
+                    'dropoff_location' => sanitize_text_field($ticket_data['dropoff_location']),
+                    'seat_number' => $seat_number,
+                    'status' => sanitize_text_field($ticket_data['status'] ?? 'Chưa thanh toán'),
+                    'note' => sanitize_text_field($ticket_data['note'] ?? ''),
+                    'created_at' => current_time('mysql'),
+                    'updated_at' => current_time('mysql'),
+                ));
+
+                if ($result === false) {
+                    throw new Exception('Không thể tạo vé xe: ' . $wpdb->last_error, 500);
+                }
+
+                $ticket_results[] = array(
+                    'ticket_id' => $wpdb->insert_id,
+                    'ticket_code' => $ticket_code,
+                    'seat_number' => $seat_number,
+                );
             }
 
-            // Validate email, phone, seat_number tương tự như create_ticket
-            // ...
-
-            $seat_number = sanitize_text_field($ticket_data['seat_number']);
-            $seat_exists = $wpdb->get_var($wpdb->prepare("
-                SELECT COUNT(*) 
-                FROM $table_tickets 
-                WHERE trip_id = %d AND seat_number = %s", 
-                $trip_id, $seat_number
-            ));
-            if ($seat_exists > 0) {
-                throw new Exception("Ghế $seat_number đã được đặt", 400);
-            }
-
-            $ticket_code = 'TICKET-' . strtoupper(substr(md5(uniqid()), 0, 8));
-            $result = $wpdb->insert($table_tickets, array(
-                'ticket_code' => $ticket_code,
-                'trip_id' => $trip_id,
-                'customer_name' => sanitize_text_field($ticket_data['customer_name']),
-                'customer_phone' => sanitize_text_field($ticket_data['customer_phone']),
-                'customer_email' => sanitize_email($ticket_data['customer_email'] ?? ''),
-                'pickup_location' => sanitize_text_field($ticket_data['pickup_location']),
-                'dropoff_location' => sanitize_text_field($ticket_data['dropoff_location']),
-                'seat_number' => $seat_number,
-                'status' => sanitize_text_field($ticket_data['status'] ?? 'Chưa thanh toán'),
-                'note' => sanitize_text_field($ticket_data['note'] ?? ''),
-                'created_at' => current_time('mysql'),
-                'updated_at' => current_time('mysql'),
-            ));
-
-            if ($result === false) {
-                throw new Exception('Không thể tạo vé xe: ' . $wpdb->last_error, 500);
-            }
-
-            $ticket_results[] = array(
-                'ticket_id' => $wpdb->insert_id,
-                'ticket_code' => $ticket_code,
-                'seat_number' => $seat_number,
+            // Cập nhật available_seats
+            $wpdb->update(
+                $table_trips, 
+                array('available_seats' => $trip->available_seats - count($data['tickets'])), 
+                array('trip_id' => $trip_id)
             );
+
+            $wpdb->query('COMMIT');
+
+            return new WP_REST_Response(array(
+                'message' => 'Các vé xe đã được tạo',
+                'tickets' => $ticket_results,
+                'price' => $trip->price,
+            ), 201);
+        } catch (Exception $e) {
+            $wpdb->query('ROLLBACK');
+            return new WP_Error('error', $e->getMessage(), array('status' => $e->getCode() ?: 500));
         }
-
-        // Cập nhật available_seats
-        $wpdb->update(
-            $table_trips, 
-            array('available_seats' => $trip->available_seats - count($data['tickets'])), 
-            array('trip_id' => $trip_id)
-        );
-
-        $wpdb->query('COMMIT');
-
-        return new WP_REST_Response(array(
-            'message' => 'Các vé xe đã được tạo',
-            'tickets' => $ticket_results,
-            'price' => $trip->price,
-        ), 201);
-    } catch (Exception $e) {
-        $wpdb->query('ROLLBACK');
-        return new WP_Error('error', $e->getMessage(), array('status' => $e->getCode() ?: 500));
     }
-}
 }
 
 new Ticket_API();

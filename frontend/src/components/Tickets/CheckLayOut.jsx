@@ -2,6 +2,7 @@ import { useState } from "react";
 import BackToTop from "../Shared/BackToTop";
 import HeroPage from "../Layout/HeroPage";
 import ticketService from "../../service/ticketService"; // Fixed import path (services instead of service)
+import {ClipLoader} from "react-spinners";
 
 function CheckLayOut({ title, subtitle, fields, buttonText, steps }) {
   const [ticketInfo, setTicketInfo] = useState(null);
@@ -10,6 +11,8 @@ function CheckLayOut({ title, subtitle, fields, buttonText, steps }) {
     ticketCode: "",
     phoneNumber: "",
   });
+
+  const [loading, setLoading] = useState(false);
 
   const handleInputChange = (e, fieldLabel) => {
     const value = e.target.value;
@@ -25,6 +28,7 @@ function CheckLayOut({ title, subtitle, fields, buttonText, steps }) {
     e.preventDefault();
     setError(null);
     setTicketInfo(null);
+    setLoading(true); // Bắt đầu loading
 
     const { ticketCode, phoneNumber } = formData;
 
@@ -41,6 +45,8 @@ function CheckLayOut({ title, subtitle, fields, buttonText, steps }) {
       setTicketInfo(ticket);
     } catch (err) {
       setError(err.message || "Đã xảy ra lỗi khi tra cứu vé.");
+    } finally {
+      setLoading(false); // Kết thúc loading
     }
   };
 
@@ -69,6 +75,7 @@ function CheckLayOut({ title, subtitle, fields, buttonText, steps }) {
                     ? formData.ticketCode
                     : formData.phoneNumber
                 }
+                disabled={loading} // Disable input when loading
               />
             </div>
           ))}
@@ -76,8 +83,14 @@ function CheckLayOut({ title, subtitle, fields, buttonText, steps }) {
             <button
               type="submit"
               className="bg-bluecustom text-white w-52 h-10 rounded-xl"
+              disabled={loading} // Disable button when loading
             >
-              {buttonText}
+              {loading ? (
+                <ClipLoader 
+                color="#ffffff"
+                size={20}
+                />
+              ):(buttonText)}
             </button>
           </div>
         </form>

@@ -77,16 +77,19 @@ const ticketService = {
   },
 
   checkTicket: async (ticketCode, phoneNumber) => {
+    console.log('checkTicket called with:', { ticketCode, phoneNumber });
     try {
-      const response = await apiClient.post("/tickets/check", {
-        ticket_code: ticketCode,
-        customer_phone: phoneNumber,
-      });
-      return response.data;
+        const response = await apiClient.post("/tickets/check", {
+            ticket_code: ticketCode,
+            customer_phone: phoneNumber,
+        });
+        console.log('checkTicket response:', response.data);
+        return response.data;
     } catch (error) {
-      throw new Error(error.response?.data?.message || "Lỗi khi tra cứu vé xe");
+        console.error('checkTicket error:', error.response?.data || error.message);
+        throw new Error(error.response?.data?.message || "Lỗi khi tra cứu vé xe");
     }
-  },
+},
 };
 
 export default ticketService;

@@ -6,7 +6,7 @@ const API_BASE_URL = "http://localhost:8000/wp-json/nhaxemyduyen/v1/trips";
 // Tạo một instance của axios với cấu hình mặc định
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
-  withCredentials: true, // Để gửi cookie xác thực (dành cho các endpoint yêu cầu quyền)
+  withCredentials: true,
   headers: {
     "Content-Type": "application/json",
   },
@@ -33,6 +33,18 @@ const tripService = {
     } catch (error) {
       throw new Error(
         error.response?.data?.message || "Lỗi khi lấy thông tin chuyến xe"
+      );
+    }
+  },
+
+  // Lấy danh sách ghế của một chuyến xe
+  getTripSeats: async (id) => {
+    try {
+      const response = await apiClient.get(`/${id}/seats`);
+      return response.data;
+    } catch (error) {
+      throw new Error(
+        error.response?.data?.message || "Lỗi khi lấy danh sách ghế"
       );
     }
   },

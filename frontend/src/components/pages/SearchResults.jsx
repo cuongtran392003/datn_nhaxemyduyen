@@ -3,6 +3,7 @@ import { useEffect, useState, useMemo } from "react";
 import TripCard from "../TripCard";
 import SeatSelection from "../SeatSelection";
 import route_no_schedule_2 from "../../assets/images/route-no-schedule-2.png";
+
 function SearchResults() {
   const location = useLocation();
   const [trips, setTrips] = useState([]);
@@ -15,6 +16,7 @@ function SearchResults() {
   });
   const [sortOption, setSortOption] = useState("");
   const [expandedTripId, setExpandedTripId] = useState(null);
+  const [isFilterOpen, setIsFilterOpen] = useState(false); // Trạng thái mở/đóng filter trên mobile
 
   const {
     trips: initialTrips,
@@ -23,7 +25,6 @@ function SearchResults() {
     date,
   } = location.state || {};
 
-  // Hàm định dạng ngày thành dạng ngày/tháng/năm
   const formatDate = (dateString) => {
     if (!dateString) return "Không xác định";
     const date = new Date(dateString);
@@ -61,10 +62,10 @@ function SearchResults() {
         }
 
         return {
-          id: trip.trip_id || `trip-${Math.random()}`, // Fallback ID
+          id: trip.trip_id || `trip-${Math.random()}`,
           pickup_location: trip.pickup_location || "Không xác định",
           dropoff_location: trip.dropoff_location || "Không xác định",
-          date: formatDate(date), // Định dạng lại date thành ngày/tháng/năm
+          date: formatDate(date),
           time: timeCategory,
           price: parseFloat(trip.price) || 0,
           availableSeats: parseInt(trip.available_seats) || 0,
@@ -83,7 +84,6 @@ function SearchResults() {
   const filteredTrips = useMemo(() => {
     let updatedTrips = [...trips];
 
-    // Apply filters
     if (filters.time) {
       updatedTrips = updatedTrips.filter((trip) => trip.time === filters.time);
     }
@@ -120,7 +120,6 @@ function SearchResults() {
       );
     }
 
-    // Apply sorting
     if (sortOption) {
       updatedTrips.sort((a, b) => {
         if (sortOption === "earliest" || sortOption === "latest") {
@@ -146,21 +145,19 @@ function SearchResults() {
     return updatedTrips;
   }, [filters, sortOption, trips]);
 
-  // Extract unique pickup and dropoff locations
   const uniquePickups = [...new Set(trips.map((trip) => trip.pickup_location))];
   const uniqueDropoffs = [
     ...new Set(trips.map((trip) => trip.dropoff_location)),
   ];
 
-  // Fallback rendering if location.state is missing
   if (!initialTrips || !departure || !destination || !date) {
     return (
-      <div className="min-h-screen bg-gray-50 py-8 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-7xl mx-auto">
-          <div className="bg-white p-8 rounded-xl shadow-md flex items-center justify-center gap-3 text-gray-600 text-lg">
+      <div className="min-h-screen bg-gray-50 py-4 px-4">
+        <div className="max-w-4xl mx-auto">
+          <div className="bg-white p-6 rounded-lg shadow-md flex flex-col items-center justify-center gap-3 text-gray-600 text-base text-center">
             <svg
               xmlns="http://www.w3.org/2000/svg"
-              className="h-8 w-8"
+              className="h-6 w-6"
               viewBox="0 0 20 20"
               fill="currentColor"
             >
@@ -178,12 +175,38 @@ function SearchResults() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-7xl mx-auto">
-        <div className="flex flex-col lg:flex-row gap-8">
+    <div className="min-h-screen bg-gray-50 py-4 px-4">
+      <div className="max-w-4xl mx-auto">
+        {/* Nút mở filter trên mobile */}
+        <div className="lg:hidden mb-4">
+          <button
+            onClick={() => setIsFilterOpen(!isFilterOpen)}
+            className="w-full bg-blue-600 text-white rounded-lg py-2 px-4 flex items-center justify-center gap-2 hover:bg-blue-700 transition-colors"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="h-5 w-5"
+              viewBox="0 0 20 20"
+              fill="currentColor"
+            >
+              <path
+                fillRule="evenodd"
+                d="M3 3a1 1 0 011-1h12a1 1 0 011 1v3a1 1 0 01-.293.707L12 11.414V15a1 1 0 01-.293.707l-2 2A1 1 0 018 17v-5.586L3.293 6.707A1 1 0 013 6V3z"
+                clipRule="evenodd"
+              />
+            </svg>
+            {isFilterOpen ? "Đóng bộ lọc" : "Mở bộ lọc"}
+          </button>
+        </div>
+
+        <div className="flex flex-col lg:flex-row gap-4">
           {/* Sidebar: Filters */}
-          <div className="lg:w-1/4 bg-white rounded-xl shadow-lg p-6 sticky top-8">
-            <h2 className="text-xl font-semibold text-gray-800 mb-6 flex items-center gap-2">
+          <div
+            className={`lg:w-1/4 bg-white rounded-lg shadow-md p-4 lg:sticky lg:top-4 transition-all duration-300 ${
+              isFilterOpen ? "block" : "hidden lg:block"
+            }`}
+          >
+            <h2 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
               <svg
                 xmlns="http://www.w3.org/2000/svg"
                 className="h-5 w-5 text-blue-600"
@@ -198,10 +221,9 @@ function SearchResults() {
               </svg>
               Lọc Chuyến Xe
             </h2>
-            <div className="space-y-6">
-              {/* Thời gian */}
+            <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
                   Giờ Đi
                 </label>
                 <select
@@ -209,7 +231,7 @@ function SearchResults() {
                   onChange={(e) =>
                     setFilters((prev) => ({ ...prev, time: e.target.value }))
                   }
-                  className="block w-full border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 shadow-sm"
+                  className="block w-full border-gray-300 rounded-lg py-2 px-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 shadow-sm text-sm"
                 >
                   <option value="">Tất cả</option>
                   <option value="Morning">Sáng (5:00 - 11:59)</option>
@@ -217,9 +239,8 @@ function SearchResults() {
                   <option value="Evening">Tối (17:00 - 23:59)</option>
                 </select>
               </div>
-              {/* Giá vé */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
                   Giá Tối Đa (VND)
                 </label>
                 <input
@@ -229,13 +250,12 @@ function SearchResults() {
                     setFilters((prev) => ({ ...prev, price: e.target.value }))
                   }
                   min="0"
-                  className="block w-full border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 shadow-sm"
+                  className="block w-full border-gray-300 rounded-lg py-2 px-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 shadow-sm text-sm"
                   placeholder="Nhập giá tối đa"
                 />
               </div>
-              {/* Số chỗ trống */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
                   Số Chỗ Trống Tối Thiểu
                 </label>
                 <input
@@ -245,13 +265,12 @@ function SearchResults() {
                     setFilters((prev) => ({ ...prev, seats: e.target.value }))
                   }
                   min="0"
-                  className="block w-full border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 shadow-sm"
+                  className="block w-full border-gray-300 rounded-lg py-2 px-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 shadow-sm text-sm"
                   placeholder="Nhập số chỗ"
                 />
               </div>
-              {/* Điểm đón */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
                   Điểm Đón
                 </label>
                 <select
@@ -259,7 +278,7 @@ function SearchResults() {
                   onChange={(e) =>
                     setFilters((prev) => ({ ...prev, pickup: e.target.value }))
                   }
-                  className="block w-full border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 shadow-sm"
+                  className="block w-full border-gray-300 rounded-lg py-2 px-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 shadow-sm text-sm"
                 >
                   <option value="">Tất cả</option>
                   {uniquePickups.map((pickup) => (
@@ -269,9 +288,8 @@ function SearchResults() {
                   ))}
                 </select>
               </div>
-              {/* Điểm trả */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
                   Điểm Trả
                 </label>
                 <select
@@ -279,7 +297,7 @@ function SearchResults() {
                   onChange={(e) =>
                     setFilters((prev) => ({ ...prev, dropoff: e.target.value }))
                   }
-                  className="block w-full border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 shadow-sm"
+                  className="block w-full border-gray-300 rounded-lg py-2 px-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 shadow-sm text-sm"
                 >
                   <option value="">Tất cả</option>
                   {uniqueDropoffs.map((dropoff) => (
@@ -294,12 +312,11 @@ function SearchResults() {
 
           {/* Main Content: Search Results */}
           <div className="lg:w-3/4">
-            {/* Tiêu đề và Sắp xếp */}
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6">
-              <h1 className="text-3xl font-bold text-gray-800 flex items-center gap-2">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4">
+              <h1 className="text-2xl sm:text-3xl font-bold text-gray-800 flex items-center gap-2">
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
-                  className="h-6 w-6 text-blue-600"
+                  className="h-5 w-5 text-blue-600"
                   viewBox="0 0 20 20"
                   fill="currentColor"
                 >
@@ -311,14 +328,14 @@ function SearchResults() {
                 </svg>
                 Kết quả tìm kiếm: {departure} → {destination} | {formatDate(date)}
               </h1>
-              <div className="mt-4 sm:mt-0 sm:ml-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2 sm:mb-0 sm:inline-block sm:mr-2">
+              <div className="mt-3 sm:mt-0 sm:ml-4">
+                <label className="block text-sm font-medium text-gray-700 mb-1 sm:mb-0 sm:inline-block sm:mr-2">
                   Sắp xếp theo
                 </label>
                 <select
                   value={sortOption}
                   onChange={(e) => setSortOption(e.target.value)}
-                  className="block w-full sm:w-auto border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 shadow-sm"
+                  className="block w-full sm:w-auto border-gray-300 rounded-lg py-2 px-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 shadow-sm text-sm"
                 >
                   <option value="">Mặc định</option>
                   <option value="earliest">Giờ đi sớm nhất</option>
@@ -329,25 +346,29 @@ function SearchResults() {
               </div>
             </div>
 
-            {/* Danh sách chuyến xe */}
             {filteredTrips.length === 0 ? (
-              <div className="bg-white p-8 rounded-xl shadow-md flex flex-col items-center justify-center 
-              gap-3 text-gray-600 text-lg text-center leading-10">
-                 <span>
-                    Không tìm thấy chuyến xe nào từ {departure} đến {destination} 
-                    vào ngày {formatDate(date)}.
-                    <br/> Hiện tại, hệ thống chưa tìm thấy chuyến đi theo yêu của khách hàng
-                    ,quý khách có thể thử.
-                    <span className="text-bluecustom">Hoặc liên hệ hotline: 1900 1111 2222</span>
+              <div className="bg-white p-4 rounded-lg shadow-md flex flex-col items-center justify-center gap-3 text-gray-600 text-sm text-center">
+                <span className="leading-relaxed">
+                  Không tìm thấy chuyến xe nào từ {departure} đến {destination}{" "}
+                  vào ngày {formatDate(date)}.<br />
+                  Hiện tại, hệ thống chưa tìm thấy chuyến đi theo yêu cầu của
+                  khách hàng, quý khách có thể thử lại.<br />
+                  <span className="text-blue-600 font-medium">
+                    Hoặc liên hệ hotline: 1900 1111 2222
                   </span>
-                  <img src={route_no_schedule_2} alt="không có chuyến xe nào"/>
+                </span>
+                <img
+                  src={route_no_schedule_2}
+                  alt="Không có chuyến xe nào"
+                  className="max-w-full h-auto max-h-40"
+                />
               </div>
             ) : (
-              <ul className="space-y-6">
+              <ul className="space-y-4">
                 {filteredTrips.map((trip) => (
                   <li
                     key={trip.id}
-                    className="bg-white p-6 rounded-xl shadow-md hover:shadow-lg transition-shadow duration-300"
+                    className="bg-white p-4 rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300"
                   >
                     <TripCard
                       trip={trip}
@@ -358,11 +379,34 @@ function SearchResults() {
                       }
                     />
                     {expandedTripId === trip.id && (
-                      <div className="mt-6 border-t border-gray-200 pt-6">
-                        <SeatSelection
-                          selectedTrip={trip}
-                          onBack={() => setExpandedTripId(null)}
-                        />
+                      <div className="fixed inset-0 bg-gray-800 bg-opacity-50 flex items-center justify-center z-50 lg:static lg:bg-transparent lg:flex-none">
+                        <div className="bg-white p-4 rounded-lg max-w-full w-full max-h-[90vh] overflow-y-auto lg:p-6 lg:mt-6 lg:border-t lg:border-gray-200 lg:pt-6">
+                          <div className="flex justify-end mb-2 lg:hidden">
+                            <button
+                              onClick={() => setExpandedTripId(null)}
+                              className="text-gray-600 hover:text-gray-800"
+                            >
+                              <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                className="h-6 w-6"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                stroke="currentColor"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M6 18L18 6M6 6l12 12"
+                                />
+                              </svg>
+                            </button>
+                          </div>
+                          <SeatSelection
+                            selectedTrip={trip}
+                            onBack={() => setExpandedTripId(null)}
+                          />
+                        </div>
                       </div>
                     )}
                   </li>
