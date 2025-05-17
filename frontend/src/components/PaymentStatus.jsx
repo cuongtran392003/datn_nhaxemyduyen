@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { useAuth } from "./contexts/AuthContext";
 
 function PaymentStatus() {
   const [order, setOrder] = useState(null);
@@ -20,19 +19,29 @@ function PaymentStatus() {
       return;
     }
 
-    try {
-      const orders = JSON.parse(localStorage.getItem("orders")) || [];
-      const foundOrder = orders.find((o) => o.order_id === orderId);
-      if (foundOrder) {
-        setOrder(foundOrder);
-      } else {
-        throw new Error("Không tìm thấy đơn hàng.");
-      }
-      setLoading(false);
-    } catch (err) {
-      setError("Lỗi khi kiểm tra trạng thái đơn hàng: " + err.message);
-      setLoading(false);
-    }
+    fetch(`http://localhost:8000/wp-json/nhaxemyduyen/v1/order/${orderId}`, {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+      },
+    })
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error(`Không tìm thấy đơn hàng (Mã lỗi: ${response.status})`);
+        }
+        return response.json();
+      })
+      .then((data) => {
+        if (!data || typeof data !== "object") {
+          throw new Error("Dữ liệu đơn hàng không hợp lệ.");
+        }
+        setOrder(data);
+        setLoading(false);
+      })
+      .catch((err) => {
+        setError("Lỗi khi kiểm tra trạng thái đơn hàng: " + err.message);
+        setLoading(false);
+      });
   }, [location]);
 
   if (loading) {
@@ -60,14 +69,23 @@ function PaymentStatus() {
     );
   }
 
-  const isSuccess = order.status === "completed";
-  const ticketCodes = order.meta_data.ticket_codes || {};
-  const seats = order.meta_data.seats || "";
-  const pickup = order.meta_data.pickup || "";
-  const dropoff = order.meta_data.dropoff || "";
-  const note = order.meta_data.note || "Không có ghi chú";
-  const driver_name = order.meta_data.driver_name || "Chưa chọn";
-  const vehicle_plate = order.meta_data.vehicle_plate || "Chưa chọn";
+  const isSuccess = order?.status === "Đã thanh toán";
+  const ticketCodes = Array.isArray(order?.meta_data?.ticket_codes)
+    ? order.meta_data.ticket_codes
+    : [];
+  const seats = order?.meta_data?.seats || "Không xác định";
+  const pickup = order?.meta_data?.pickup || "Không xác định";
+  const dropoff = order?.meta_data?.dropoff || "Không xác định";
+  const note = order?.meta_data?.note || "Không có ghi chú";
+  const driver_name = order?.meta_data?.driver_name || "Chưa chọn";
+  const vehicle_plate = order?.meta_data?.vehicle_plate || "Chưa chọn";
+  const departure_time = order?.trip_info?.departure_time || "Không xác định";
+  const customer_name = order?.billing?.first_name || "Không xác định";
+  const phone = order?.billing?.phone || "Không xác định";
+  const email = order?.billing?.email || "Không xác định";
+  const total = order?.total
+    ? parseFloat(order.total).toLocaleString("vi-VN")
+    : "0";
 
   return (
     <div className="max-w-3xl mx-auto p-6">
@@ -93,20 +111,20 @@ function PaymentStatus() {
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-gray-700 mb-4">
             <p>
-              <span className="font-semibold">Khách hàng:</span> {order.billing.first_name}
+              <span className="font-semibold">Khách hàng:</span> {customer_name}
             </p>
             <p>
-              <span className="font-semibold">Số điện thoại:</span> {order.billing.phone}
+              <span className="font-semibold">Số điện thoại:</span> {phone}
             </p>
             <p>
-              <span className="font-semibold">Email:</span> {order.billing.email}
+              <span className="font-semibold">Email:</span> {email}
             </p>
             <p>
               <span className="font-semibold">Chuyến xe:</span> {pickup} → {dropoff}
             </p>
             <p>
               <span className="font-semibold">Thời gian khởi hành:</span>{" "}
-              {order.trip_info.departure_time}
+              {departure_time}
             </p>
             <p>
               <span className="font-semibold">Ghế:</span> {seats}
@@ -121,17 +139,20 @@ function PaymentStatus() {
               <span className="font-semibold">Ghi chú:</span> {note}
             </p>
             <p>
-              <span className="font-semibold">Tổng tiền:</span>{" "}
-              {parseFloat(order.total).toLocaleString("vi-VN")}đ
+              <span className="font-semibold">Tổng tiền:</span> {total}đ
             </p>
           </div>
           <div className="mb-4">
             <p className="text-gray-700 font-semibold">Mã vé của bạn:</p>
-            {Object.values(ticketCodes).map((code, idx) => (
-              <p key={idx} className="text-green-600 font-bold text-lg">
-                {code}
-              </p>
-            ))}
+            {ticketCodes.length > 0 ? (
+              ticketCodes.map((code, idx) => (
+                <p key={idx} className="text-green-600 font-bold text-lg">
+                  {code}
+                </p>
+              ))
+            ) : (
+              <p className="text-gray-600">Không có mã vé.</p>
+            )}
           </div>
           <p className="text-gray-600 mb-6">
             Thông tin vé đã được gửi qua email và SMS. Vui lòng kiểm tra!
@@ -139,13 +160,13 @@ function PaymentStatus() {
           <div className="flex justify-center gap-4">
             <button
               onClick={() => navigate("/tickets")}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-bluecustom transition-colors"
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
             >
               Tra cứu vé
             </button>
             <button
               onClick={() => navigate("/search")}
-              className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-bluecustom transition-colors"
+              className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
             >
               Tìm chuyến xe khác
             </button>

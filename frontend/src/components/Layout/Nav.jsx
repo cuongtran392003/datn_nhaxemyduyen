@@ -9,7 +9,7 @@ function Nav() {
   const handleLogout = () => {
     logout();
     setIsOpen(false);
-    navigate("/signin");
+    navigate("/");
   };
   const [isOpen, setIsOpen] = useState(false);
 

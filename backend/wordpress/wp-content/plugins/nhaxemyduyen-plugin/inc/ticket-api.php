@@ -1,4 +1,5 @@
 <?php
+
 class Ticket_API {
     public function __construct() {
         add_action('rest_api_init', array($this, 'register_routes'));
@@ -60,7 +61,23 @@ class Ticket_API {
             'callback' => array($this, 'create_tickets_bulk'),
             'permission_callback' => '__return_true',
         ));
+        
+
+        // Tạo URL thanh toán VNPAY
+        register_rest_route('nhaxemyduyen/v1', '/create-payment', array(
+            'methods' => 'POST',
+            'callback' => array($this, 'create_vnpay_payment'),
+            'permission_callback' => '__return_true',
+        ));
+
+        // Lấy thông tin đơn hàng dựa trên vnp_TxnRef
+        register_rest_route('nhaxemyduyen/v1', '/order/(?P<orderId>\d+)', array(
+            'methods' => 'GET',
+            'callback' => array($this, 'get_order'),
+            'permission_callback' => '__return_true',
+        ));
     }
+
 
     /**
      * Lấy danh sách vé
@@ -541,36 +558,7 @@ class Ticket_API {
 
             $ticket_results = [];
             foreach ($data['tickets'] as $ticket_data) {
-                // Validate dữ liệu tương tự như create_ticket
-                $required_fields = ['trip_id', 'customer_name', 'customer_phone', 'seat_number', 'pickup_location', 'dropoff_location'];
-                foreach ($required_fields as $field) {
-                    if (empty($ticket_data[$field])) {
-                        throw new Exception("Thiếu trường bắt buộc: $field", 400);
-                    }
-                }
-
-                // Validate email, phone, seat_number
-                if (!empty($ticket_data['customer_email']) && !is_email($ticket_data['customer_email'])) {
-                    throw new Exception('Email không hợp lệ', 400);
-                }
-                if (!preg_match('/^[0-9]{10,11}$/', $ticket_data['customer_phone'])) {
-                    throw new Exception('Số điện thoại phải có 10-11 chữ số', 400);
-                }
-                if (!preg_match('/^A[1-9][0-9]?$/', $ticket_data['seat_number']) || intval(substr($ticket_data['seat_number'], 1)) > 44) {
-                    throw new Exception('Số ghế không hợp lệ (phải là A1-A44)', 400);
-                }
-
-                $seat_number = sanitize_text_field($ticket_data['seat_number']);
-                $seat_exists = $wpdb->get_var($wpdb->prepare("
-                    SELECT COUNT(*) 
-                    FROM $table_tickets 
-                    WHERE trip_id = %d AND seat_number = %s", 
-                    $trip_id, $seat_number
-                ));
-                if ($seat_exists > 0) {
-                    throw new Exception("Ghế $seat_number đã được đặt", 400);
-                }
-
+                // Validate dữ liệu...
                 $ticket_code = 'TICKET-' . strtoupper(substr(md5(uniqid()), 0, 8));
                 $result = $wpdb->insert($table_tickets, array(
                     'ticket_code' => $ticket_code,
@@ -580,7 +568,7 @@ class Ticket_API {
                     'customer_email' => sanitize_email($ticket_data['customer_email'] ?? ''),
                     'pickup_location' => sanitize_text_field($ticket_data['pickup_location']),
                     'dropoff_location' => sanitize_text_field($ticket_data['dropoff_location']),
-                    'seat_number' => $seat_number,
+                    'seat_number' => sanitize_text_field($ticket_data['seat_number']),
                     'status' => sanitize_text_field($ticket_data['status'] ?? 'Chưa thanh toán'),
                     'note' => sanitize_text_field($ticket_data['note'] ?? ''),
                     'created_at' => current_time('mysql'),
@@ -594,11 +582,10 @@ class Ticket_API {
                 $ticket_results[] = array(
                     'ticket_id' => $wpdb->insert_id,
                     'ticket_code' => $ticket_code,
-                    'seat_number' => $seat_number,
+                    'seat_number' => $ticket_data['seat_number'],
                 );
             }
 
-            // Cập nhật available_seats
             $wpdb->update(
                 $table_trips, 
                 array('available_seats' => $trip->available_seats - count($data['tickets'])), 
@@ -617,6 +604,171 @@ class Ticket_API {
             return new WP_Error('error', $e->getMessage(), array('status' => $e->getCode() ?: 500));
         }
     }
+
+    /**
+     * Tạo URL thanh toán VNPAY
+     */
+    public function create_vnpay_payment(WP_REST_Request $request) {
+        global $wpdb;
+        $table_tickets = $wpdb->prefix . 'tickets';
+    
+        date_default_timezone_set('Asia/Ho_Chi_Minh');
+    
+        // Ghi log để debug
+        function log_error($message) {
+            error_log(date('[Y-m-d H:i:s e] ') . $message . PHP_EOL, 3, plugin_dir_path(__FILE__) . '../vnpay_php/vnpay_error.log');
+        }
+    
+        require_once plugin_dir_path(__FILE__) . '../vnpay_php/config.php';
+    
+        $params = $request->get_json_params();
+        $ticketIds = isset($params['ticketIds']) ? $params['ticketIds'] : [];
+        $amount = isset($params['amount']) ? $params['amount'] : 0;
+        $language = isset($params['language']) ? $params['language'] : 'vn';
+        $bankCode = isset($params['bankCode']) ? $params['bankCode'] : '';
+    
+        if (empty($ticketIds) || $amount <= 0) {
+            log_error("Lỗi: Dữ liệu không hợp lệ - ticketIds: " . print_r($ticketIds, true) . ", amount: $amount");
+            return new WP_Error('invalid_data', 'Dữ liệu không hợp lệ', array('status' => 400));
+        }
+    
+        $vnp_IpAddr = $_SERVER['REMOTE_ADDR'];
+        $txnRef = rand(1, 10000);
+        $ticketIdsStr = json_encode($ticketIds);
+        $orderInfo = "Thanh toan GD: $txnRef - Tickets: $ticketIdsStr";
+    
+        if (strlen($orderInfo) > 255) {
+            log_error("Lỗi: vnp_OrderInfo vượt quá 255 ký tự: " . $orderInfo);
+            return new WP_Error('order_info_too_long', 'Thông tin giao dịch quá dài', array('status' => 400));
+        }
+    
+        // Lưu vnp_TxnRef và vnp_OrderInfo vào bảng wp_tickets
+        foreach ($ticketIds as $ticketId) {
+            $result = $wpdb->update(
+                $table_tickets,
+                array(
+                    'vnp_TxnRef' => $txnRef,
+                    'txnRef' => $txnRef, // Lưu vào cột txnRef nếu cần
+                    'updated_at' => current_time('mysql'),
+                ),
+                array('ticket_id' => $ticketId),
+                array('%s', '%s', '%s'),
+                array('%d')
+            );
+    
+            if ($result === false) {
+                log_error("Lỗi khi lưu vnp_TxnRef cho ticket $ticketId: " . $wpdb->last_error);
+                return new WP_Error('db_error', 'Lỗi khi lưu thông tin giao dịch', array('status' => 500));
+            }
+        }
+    
+        $inputData = array(
+            "vnp_Version" => "2.1.0",
+            "vnp_TmnCode" => $vnp_TmnCode,
+            "vnp_Amount" => $amount * 100,
+            "vnp_Command" => "pay",
+            "vnp_CreateDate" => date('YmdHis'),
+            "vnp_CurrCode" => "VND",
+            "vnp_IpAddr" => $vnp_IpAddr,
+            "vnp_Locale" => $language,
+            "vnp_OrderInfo" => $orderInfo,
+            "vnp_OrderType" => "other",
+            "vnp_ReturnUrl" => $vnp_Returnurl,
+            "vnp_TxnRef" => $txnRef,
+            "vnp_ExpireDate" => $expire,
+        );
+    
+        if (!empty($bankCode)) {
+            $inputData['vnp_BankCode'] = $bankCode;
+        }
+    
+        ksort($inputData);
+        $query = "";
+        $i = 0;
+        $hashdata = "";
+        foreach ($inputData as $key => $value) {
+            if ($i == 1) {
+                $hashdata .= '&' . urlencode($key) . "=" . urlencode($value);
+            } else {
+                $hashdata .= urlencode($key) . "=" . urlencode($value);
+                $i = 1;
+            }
+            $query .= urlencode($key) . "=" . urlencode($value) . '&';
+        }
+    
+        $vnp_Url = $vnp_Url . "?" . $query;
+        if (!isset($vnp_HashSecret)) {
+            log_error("Lỗi: Thiếu vnp_HashSecret trong cấu hình.");
+            return new WP_Error('config_error', 'Cấu hình VNPAY không hợp lệ', array('status' => 500));
+        }
+    
+        $vnpSecureHash = hash_hmac('sha512', $hashdata, $vnp_HashSecret);
+        $vnp_Url .= 'vnp_SecureHash=' . $vnpSecureHash;
+    
+        return rest_ensure_response(array(
+            'payment_url' => $vnp_Url,
+            'txnRef' => $txnRef,
+        ));
+    }
+
+    /**
+     * Lấy thông tin đơn hàng dựa trên vnp_TxnRef
+     */
+    public function get_order($request) {
+        global $wpdb;
+        $table_tickets = $wpdb->prefix . 'tickets';
+        $table_trips = $wpdb->prefix . 'trips';
+        $table_routes = $wpdb->prefix . 'routes';
+        $table_locations = $wpdb->prefix . 'locations';
+        $table_drivers = $wpdb->prefix . 'drivers';
+        $table_vehicles = $wpdb->prefix . 'vehicles';
+    
+        $orderId = intval($request['orderId']); // Đây là vnp_TxnRef
+        $tickets = $wpdb->get_results($wpdb->prepare("
+            SELECT t.*, tr.departure_time, tr.pickup_location as trip_pickup_location, tr.dropoff_location as trip_dropoff_location,
+                   l1.name as from_location, l2.name as to_location, 
+                   d.name as driver_name, v.license_plate as vehicle_plate,
+                   tr.price
+            FROM $table_tickets t
+            JOIN $table_trips tr ON t.trip_id = tr.trip_id
+            JOIN $table_routes r ON tr.route_id = r.route_id
+            LEFT JOIN $table_locations l1 ON r.from_location_id = l1.location_id
+            LEFT JOIN $table_locations l2 ON r.to_location_id = l2.location_id
+            LEFT JOIN $table_drivers d ON tr.driver_id = d.driver_id
+            LEFT JOIN $table_vehicles v ON tr.vehicle_id = v.vehicle_id
+            WHERE t.vnp_TxnRef = %d
+        ", $orderId), ARRAY_A);
+    
+        if (empty($tickets)) {
+            return new WP_Error('not_found', 'Không tìm thấy đơn hàng', array('status' => 404));
+        }
+    
+        $order = [
+            'status' => $tickets[0]['status'],
+            'billing' => [
+                'first_name' => $tickets[0]['customer_name'],
+                'phone' => $tickets[0]['customer_phone'],
+                'email' => $tickets[0]['customer_email'],
+            ],
+            'meta_data' => [
+                'ticket_codes' => array_column($tickets, 'ticket_code'),
+                'seats' => implode(', ', array_column($tickets, 'seat_number')),
+                'pickup' => $tickets[0]['pickup_location'],
+                'dropoff' => $tickets[0]['dropoff_location'],
+                'note' => $tickets[0]['note'],
+                'driver_name' => $tickets[0]['driver_name'] ?: 'Chưa chọn',
+                'vehicle_plate' => $tickets[0]['vehicle_plate'] ?: 'Chưa chọn',
+            ],
+            'trip_info' => [
+                'departure_time' => $tickets[0]['departure_time'],
+            ],
+            'total' => array_sum(array_column($tickets, 'price')) ?: 0,
+        ];
+    
+        return new WP_REST_Response($order, 200);
+    }
 }
+
+
 
 new Ticket_API();

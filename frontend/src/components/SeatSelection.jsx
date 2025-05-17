@@ -1,3 +1,4 @@
+// File: SeatSelection.js
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import ticketService from "../service/ticketService";
@@ -27,17 +28,14 @@ function SeatSelection({ selectedTrip, onBack }) {
 
   const navigate = useNavigate();
 
-  // Hàm kiểm tra định dạng email
   const isValidEmail = (email) => {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
   };
 
-  // Hàm kiểm tra định dạng số điện thoại
   const isValidPhone = (phone) => {
     return /^[0-9]{10,11}$/.test(phone);
   };
 
-  // Lấy thông tin ghế từ API
   useEffect(() => {
     if (!selectedTrip?.id) {
       setError("Không tìm thấy thông tin chuyến xe.");
@@ -65,12 +63,10 @@ function SeatSelection({ selectedTrip, onBack }) {
     fetchSeatAvailability();
   }, [selectedTrip?.id]);
 
-  // Cập nhật tổng giá
   useEffect(() => {
     setTotalPrice(selectedSeats.length * (selectedTrip?.price || 0));
   }, [selectedSeats, selectedTrip?.price]);
 
-  // Chuyển đổi số ghế thành định dạng A1-A44
   const formatSeatNumber = (seatNum) => `A${seatNum}`;
 
   const toggleSeat = (seatNumber) => {
@@ -184,6 +180,7 @@ function SeatSelection({ selectedTrip, onBack }) {
     setError(null);
 
     try {
+      // Tạo vé trước khi thanh toán
       const ticketsData = selectedSeats.map((seatNumber) => ({
         trip_id: selectedTrip.id,
         customer_name: name,
@@ -192,74 +189,32 @@ function SeatSelection({ selectedTrip, onBack }) {
         pickup_location: pickupDropoff.pickup,
         dropoff_location: pickupDropoff.dropoff,
         seat_number: seatNumber,
-        status: "Đã thanh toán",
+        status: "Chưa thanh toán", // Ban đầu đặt là chưa thanh toán
         note: note || "Không có ghi chú",
       }));
 
       const response = await ticketService.createTicketsBulk(ticketsData);
+      const ticketIds = response.tickets.map((ticket) => ticket.ticket_id);
 
-      const tickets = response.tickets.map((res, idx) => ({
-        ticket_code: res.ticket_code,
-        customer_name: name,
-        customer_phone: phone,
-        customer_email: email,
-        seat_number: selectedSeats[idx],
-        status: "Đã thanh toán",
-        note: note || "Không có ghi chú",
-        trip_info: {
-          departure_time: selectedTrip.departure_time,
-          pickup_location: pickupDropoff.pickup,
-          dropoff_location: pickupDropoff.dropoff,
-          driver_name: tripDetails.driver_name,
-          vehicle_plate: tripDetails.vehicle_plate,
-        },
-      }));
-
-      const storedTickets = JSON.parse(localStorage.getItem("tickets")) || [];
-      storedTickets.push(...tickets);
-      localStorage.setItem("tickets", JSON.stringify(storedTickets));
-
-      const order = {
-        status: "completed",
-        billing: {
-          first_name: name,
-          phone: phone,
-          email: email,
-        },
-        total: totalPrice.toString(),
-        meta_data: {
-          ticket_codes: response.tickets.reduce((acc, res, idx) => {
-            acc[idx] = res.ticket_code;
-            return acc;
-          }, {}),
-          seats: selectedSeats.join(", "),
-          pickup: pickupDropoff.pickup,
-          dropoff: pickupDropoff.dropoff,
-          note: note || "Không có ghi chú",
-          driver_name: tripDetails.driver_name,
-          vehicle_plate: tripDetails.vehicle_plate,
-        },
-        trip_info: {
-          departure_time: selectedTrip.departure_time,
-          driver_name: tripDetails.driver_name,
-          vehicle_plate: tripDetails.vehicle_plate,
-        },
+      // Gọi API tạo URL thanh toán
+      const paymentData = {
+        ticketIds: ticketIds,
+        amount: totalPrice,
+        language: "vn",
+        bankCode: "", // Có thể thêm lựa chọn phương thức thanh toán nếu cần
       };
 
-      const orders = JSON.parse(localStorage.getItem("orders")) || [];
-      orders.push({ order_id: `ORDER-${Date.now()}`, ...order });
-      localStorage.setItem("orders", JSON.stringify(orders));
+      const paymentResponse = await ticketService.createPayment(paymentData);
 
-      navigate(
-        `/payment-status?vnp_TxnRef=ORDER-${Date.now()}&vnp_ResponseCode=00`
-      );
+      // Chuyển hướng người dùng đến URL thanh toán VNPAY
+      window.location.href = paymentResponse.payment_url;
+
     } catch (err) {
-      console.error("Error creating tickets:", err);
+      console.error("Error during payment:", err);
       setError(
         err.message ||
-          "Có lỗi xảy ra khi tạo vé. Vui lòng kiểm tra lại thông tin."
+          "Có lỗi xảy ra khi xử lý thanh toán. Vui lòng thử lại."
       );
-    } finally {
       setLoading(false);
     }
   };

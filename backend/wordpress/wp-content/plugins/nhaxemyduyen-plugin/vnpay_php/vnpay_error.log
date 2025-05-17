@@ -1,0 +1,39 @@
+[2025-05-17 14:56:53 Asia/Ho_Chi_Minh] Lỗi: vnp_OrderInfo không chứa ticketIds: Thanh toan GD:8283
+[2025-05-17 15:03:44 Asia/Ho_Chi_Minh] Tính toán secureHash: 5af8b7b87eb4bad4d888ce69bc3553eaa072c9712af3af1223886156a162f57ad90dfa687c86d22369a507b5c62cd141215868873aede195ea209bec5b451a8b, Nhận được vnp_SecureHash: 5af8b7b87eb4bad4d888ce69bc3553eaa072c9712af3af1223886156a162f57ad90dfa687c86d22369a507b5c62cd141215868873aede195ea209bec5b451a8b
+[2025-05-17 15:03:44 Asia/Ho_Chi_Minh] vnp_OrderInfo nhận được: Thanh toan GD: 9179 - Tickets: [382]
+[2025-05-17 15:03:44 Asia/Ho_Chi_Minh] ticketIds giải mã thành công: Array
+(
+    [0] => 382
+)
+
+[2025-05-17 15:03:44 Asia/Ho_Chi_Minh] vnp_ResponseCode: 00
+[2025-05-17 15:03:44 Asia/Ho_Chi_Minh] Cập nhật thành công vé 382
+[2025-05-17 15:03:44 Asia/Ho_Chi_Minh] Chuyển hướng đến: http://localhost:3000/payment-status?vnp_TxnRef=9179&vnp_ResponseCode=00&vnp_Amount=30000000&vnp_OrderInfo=Thanh+toan+GD%3A+9179+-+Tickets%3A+%5B382%5D&vnp_TransactionNo=14962486&vnp_BankCode=NCB&vnp_PayDate=20250517150430
+[2025-05-17 15:15:18 Asia/Ho_Chi_Minh] Tính toán secureHash: 4e2b45a5c2d799b109feb692b7e3568968a2af1d4743e5bebda20f863ef50a0dde36ef82e0f01f91493a02bd446a9100c22ca04e6b6cc551589f751b3a369e8f, Nhận được vnp_SecureHash: 4e2b45a5c2d799b109feb692b7e3568968a2af1d4743e5bebda20f863ef50a0dde36ef82e0f01f91493a02bd446a9100c22ca04e6b6cc551589f751b3a369e8f
+[2025-05-17 15:15:18 Asia/Ho_Chi_Minh] vnp_OrderInfo nhận được: Thanh toan GD: 1903 - Tickets: [383]
+[2025-05-17 15:15:18 Asia/Ho_Chi_Minh] ticketIds giải mã thành công: Array
+(
+    [0] => 383
+)
+
+[2025-05-17 15:15:18 Asia/Ho_Chi_Minh] vnp_ResponseCode: 00
+[2025-05-17 15:15:18 Asia/Ho_Chi_Minh] Cập nhật thành công vé 383
+[2025-05-17 15:15:18 Asia/Ho_Chi_Minh] Chuyển hướng đến: http://localhost:3000/payment-status?vnp_TxnRef=1903&vnp_ResponseCode=00&vnp_Amount=30000000&vnp_OrderInfo=Thanh+toan+GD%3A+1903+-+Tickets%3A+%5B383%5D&vnp_TransactionNo=14962507&vnp_BankCode=NCB&vnp_PayDate=20250517151603
+[2025-05-17 15:26:27 Asia/Ho_Chi_Minh] Tính toán secureHash: 6a2f8cd2bd1a7f7c00113d16063a484568751e12768f147ef956391a5e7d075a4226a9c4327e910d3ef518dbbeba40e453373abb19a580f0c760786d36520e56, Nhận được vnp_SecureHash: 6a2f8cd2bd1a7f7c00113d16063a484568751e12768f147ef956391a5e7d075a4226a9c4327e910d3ef518dbbeba40e453373abb19a580f0c760786d36520e56
+[2025-05-17 15:26:27 Asia/Ho_Chi_Minh] vnp_OrderInfo nhận được: Thanh toan GD: 7674 - Tickets: [384]
+[2025-05-17 15:26:27 Asia/Ho_Chi_Minh] ticketIds giải mã thành công: Array
+(
+    [0] => 384
+)
+
+[2025-05-17 15:26:27 Asia/Ho_Chi_Minh] vnp_ResponseCode: 00
+[2025-05-17 15:26:27 Asia/Ho_Chi_Minh] Cập nhật thành công vé 384
+[2025-05-17 15:26:27 Asia/Ho_Chi_Minh] Chuyển hướng đến: http://localhost:3000/payment-status?vnp_TxnRef=7674&vnp_ResponseCode=00&vnp_Amount=30000000&vnp_OrderInfo=Thanh+toan+GD%3A+7674+-+Tickets%3A+%5B384%5D&vnp_TransactionNo=14962523&vnp_BankCode=NCB&vnp_PayDate=20250517152711
+[2025-05-17 15:45:15 Asia/Ho_Chi_Minh] Tính toán secureHash: be407ee98db065d7e1242d74c161261373728921cc415bc7fe1b707c71397786994d1df9fe1abd60e918ed5d3a6ad5c6ab834ae26a086cc5712c638a6a59f1a3, Nhận được vnp_SecureHash: be407ee98db065d7e1242d74c161261373728921cc415bc7fe1b707c71397786994d1df9fe1abd60e918ed5d3a6ad5c6ab834ae26a086cc5712c638a6a59f1a3
+[2025-05-17 15:45:15 Asia/Ho_Chi_Minh] vnp_ResponseCode: 00
+[2025-05-17 15:45:15 Asia/Ho_Chi_Minh] Cập nhật thành công vé với vnp_TxnRef 8424
+[2025-05-17 15:45:15 Asia/Ho_Chi_Minh] Chuyển hướng đến: http://localhost:3000/payment-status?vnp_TxnRef=8424&vnp_ResponseCode=00&vnp_Amount=30000000&vnp_TransactionNo=14962556&vnp_BankCode=NCB&vnp_PayDate=20250517154558
+[2025-05-17 16:02:40 Asia/Ho_Chi_Minh] Tính toán secureHash: 6dc8f626f00754e19b841a450240c8bab5f2b3ab13a75741683a9ec404aef477f2945021750b442f958aa9d050c3b68d654cf9d01367f45be7a3f39af9c4b2ef, Nhận được vnp_SecureHash: 6dc8f626f00754e19b841a450240c8bab5f2b3ab13a75741683a9ec404aef477f2945021750b442f958aa9d050c3b68d654cf9d01367f45be7a3f39af9c4b2ef
+[2025-05-17 16:02:40 Asia/Ho_Chi_Minh] vnp_ResponseCode: 00
+[2025-05-17 16:02:40 Asia/Ho_Chi_Minh] Cập nhật thành công vé với vnp_TxnRef 1400
+[2025-05-17 16:02:40 Asia/Ho_Chi_Minh] Chuyển hướng đến: http://localhost:3000/payment-status?vnp_TxnRef=1400&vnp_ResponseCode=00&vnp_Amount=30000000&vnp_TransactionNo=14962586&vnp_BankCode=NCB&vnp_PayDate=20250517160323

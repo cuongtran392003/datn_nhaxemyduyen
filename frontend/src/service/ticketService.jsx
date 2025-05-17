@@ -89,7 +89,18 @@ const ticketService = {
         console.error('checkTicket error:', error.response?.data || error.message);
         throw new Error(error.response?.data?.message || "Lỗi khi tra cứu vé xe");
     }
-},
+  },
+
+  createPayment: async (paymentData) => {
+    try {
+      const response = await apiClient.post("/create-payment", paymentData);
+      return response.data;
+    } catch (error) {
+      throw new Error(
+        error.response?.data?.message || "Lỗi khi tạo URL thanh toán"
+      );
+    }
+  },
 };
 
 export default ticketService;

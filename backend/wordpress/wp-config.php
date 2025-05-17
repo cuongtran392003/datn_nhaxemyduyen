@@ -135,6 +135,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 	define( 'ABSPATH', __DIR__ . '/' );
 }
 
+define('WP_TIMEZONE', 'Asia/Ho_Chi_Minh');
+
 
 header('Access-Control-Allow-Origin: http://localhost:3000' );
 header('Access-Control-Allow-Methods: GET, POST, OPTIONS' );
@@ -145,7 +147,8 @@ define( 'CORS_ENABLED','true' );
 define('JWT_AUTH_CORS_ENABLE', true);
 define('JWT_AUTH_SECRET_KEY', 'your-very-secure-secret-key-here');
 
-
+define('WP_HOME', 'https://54bc-113-165-148-205.ngrok-free.app');
+define('WP_SITEURL', 'https://54bc-113-165-148-205.ngrok-free.app');
 
 /** Sets up WordPress vars and included files. */
 require_once ABSPATH . 'wp-settings.php';
