@@ -1,0 +1,17 @@
+{
+    "name": "admin/nhaxemyduyen-plugin",
+    "autoload": {
+        "psr-4": {
+            "Admin\\NhaxemyduyenPlugin\\": "src/"
+        }
+    },
+    "authors": [
+        {
+            "name": "cuongtran",
+            "email": "cuongnt392003@gmail.com"
+        }
+    ],
+    "require": {
+        "phpoffice/phpspreadsheet": "^4.2"
+    }
+}

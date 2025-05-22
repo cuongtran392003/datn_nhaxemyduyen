@@ -6,12 +6,23 @@ import Logo from "../../assets/images/logo.png";
 function Nav() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const [isOpen, setIsOpen] = useState(false);
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+
   const handleLogout = () => {
     logout();
     setIsOpen(false);
+    setIsUserMenuOpen(false);
     navigate("/");
   };
-  const [isOpen, setIsOpen] = useState(false);
+
+
+  // hàm lấy chữ cái đầu (fallback nếu không có avatar)
+  const getInitials = () => {
+    const firstInitial =user?.first_name ? user.first_name[0] : "";
+    const lastInitial = user?.last_name ? user.last_name[0] : "";
+    return `${firstInitial}${lastInitial}`.toUpperCase() || "U";
+  };
 
   return (
     <nav className="flex justify-between items-center p-6 md:px-10">
@@ -157,23 +168,64 @@ function Nav() {
         <li>
           {user ? (
             <>
-              <button
-                onClick={handleLogout}
-                className="relative inline-flex items-center justify-center p-0.5 mb-2 me-2
-          overflow-hidden text-sm font-medium text-gray-900 rounded-full
-          group bg-gradient-to-br from-purple-600 to-blue-500
-          group-hover:from-purple-600 group-hover:to-blue-500 hover:text-white
-          dark:text-black 
-          focus:ring-4 focus:outline-none focus:ring-blue-300 dark:focus:ring-blue-800"
-              >
-                <span
-                  className="relative px-5 py-2.5 transition-all ease-in duration-75 bg-white dark:bg-gray-900
-          rounded-full group-hover:bg-transparent group-hover:dark:bg-transparent"
+            <button
+              className="text-gray-700 hover:text-blue-500 transition-colors"
+              onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
+            >
+              {user.avatar_url ? (
+                <img
+                src={user.avatar_url}
+                alt='Avatar'
+                className="w-10 h-10 rounded-full object-cover"
+                onError={()=>{setIsUserMenuOpen(isUserMenuOpen)}}// giữ trạng thái menu nếu ảnh lỗi 
+                />
+              ):(
+                <span className="text-sm font-bold">{getInitials()}</span>
+              )}
+            </button>
+            <ul
+              className={`${
+                isUserMenuOpen ? "block" : "hidden"
+              } absolute bg-white shadow-xl rounded-xl z-10 transition-all 
+              duration-200 ease-in-out md:w-48 right-0 mt-2 font-poppins`}
+            >
+              <li>
+                <Link
+                  to="/profile"
+                  onClick={() => {
+                    setIsOpen(false);
+                    setIsUserMenuOpen(false);
+                  }}
+                  className="block px-4 py-2 text-black hover:bg-blue-500
+                   hover:text-white transition-colors lowercase "
                 >
-                  Đăng xuất
-                </span>
-              </button>
-            </>
+                  Hồ Sơ
+                </Link>
+              </li>
+              <li>
+                <Link
+                  to="/booking-history"
+                  onClick={() => {
+                    setIsOpen(false);
+                    setIsUserMenuOpen(false);
+                  }}
+                  className="block px-4 py-2 text-black hover:bg-blue-500
+                   hover:text-white transition-colors lowercase"
+                >
+                  Lịch Sử Đặt Vé
+                </Link>
+              </li>
+              <li>
+                <button
+                  onClick={handleLogout}
+                  className="block w-full text-left px-4 py-2 text-black
+                   hover:bg-blue-500 hover:text-white transition-colors lowercase"
+                >
+                  Đăng Xuất
+                </button>
+              </li>
+            </ul>
+          </>
           ) : (
             <Link to="/signin" onClick={() => setIsOpen(false)}>
               <button

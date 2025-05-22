@@ -25,7 +25,10 @@ import ScrollToTop from "./components/ScrollToTop";
 import PaymentStatus from "./components/PaymentStatus";
 import CSKH from "./components/Shared/CSKH";
 import NewsDetail from "./components/News/NewsDetail";
-
+import ProFile from "./components/Account/ProFile";
+import TicketHistory from "./components/Account/TicketHistory";
+import { ToastContainer } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 
 
 
@@ -51,17 +54,13 @@ function Layout() {
           <Route
             path="/news/:postId"
             element={
-              <PrivateRoute>
                 <NewsDetail />
-              </PrivateRoute>
             }
           />
           <Route
             path="/search"
             element={
-              <PrivateRoute>
                 <SearchResults />
-              </PrivateRoute>
             }
           />
           <Route path="/payment-status" element={<PaymentStatus />} />
@@ -69,6 +68,8 @@ function Layout() {
           <Route path="/signup" element={<SignUp />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/profile" element={<ProFile/>} />
+          <Route path="/booking-history" element={<TicketHistory/>} />
         </Routes>
       </main>
       {location.pathname !== "/signup" && location.pathname !== "/signin" && (
