@@ -6,7 +6,7 @@ import { useAuth } from "../contexts/AuthContext";
 
 
 
-const API_BASE_URL = "http://localhost:8000/wp-json";
+const API_BASE_URL = process.env.REACT_APP_API_BASE_URL;
 
 function ProFile() {
   const { user, updateUser } = useAuth();
@@ -22,6 +22,7 @@ function ProFile() {
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
   const [avatarLoading, setAvatarLoading] = useState(false);
+
 
   // Cập nhật state từ user
   useEffect(() => {
@@ -127,6 +128,15 @@ function ProFile() {
     const lastInitial = lastName ? lastName[0] : "";
     return `${firstInitial}${lastInitial}`.toUpperCase();
   };
+
+  const formatDate=(dateString) =>{
+    if(!dateString) return "";
+    const d= new Date(dateString);
+
+    // dinh dang YYYY-MM-DD HH:mm:ss
+    return `${String(d.getDate()).padStart(2, "0")} -${String(d.getMonth() + 1).padStart(2, "0")}-${d.getFullYear()}
+    ${String(d.getHours()).padStart(2, "0")};`
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-100 via-purple-100 to-pink-100 flex items-center justify-center p-6">

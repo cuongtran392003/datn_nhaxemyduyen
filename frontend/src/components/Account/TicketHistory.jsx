@@ -2,8 +2,7 @@ import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import axios from "axios";
 import { useAuth } from "../contexts/AuthContext";
-import BackToTop from '../Shared/BackToTop';
-
+import BackToTop from "../Shared/BackToTop";
 
 const API_BASE_URL = "http://localhost:8000/wp-json";
 
@@ -13,7 +12,6 @@ const TicketHistory = () => {
   const [tickets, setTickets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-
   // Chuyển hướng nếu chưa đăng nhập
   useEffect(() => {
     if (!user || !user.id) {
@@ -25,21 +23,28 @@ const TicketHistory = () => {
   useEffect(() => {
     const fetchTicketHistory = async () => {
       if (!user || !user.id) return;
-  
+
       setLoading(true);
       setError("");
-  
+
       try {
         const response = await axios.get(
-          `${API_BASE_URL}/nhaxemyduyen/v1/tickets?user_id=${user.id}`,
+          `${API_BASE_URL}/nhaxemyduyen/v1/tickets`, // Remove user_id query param
           {
             headers: {
               Authorization: `Bearer ${user.token}`,
             },
           }
         );
-  
-        setTickets(response.data || []);
+
+        // Check if response.data is an array
+        if (Array.isArray(response.data)) {
+          setTickets(response.data);
+        } else {
+          // Handle non-array response (e.g., { message: '...' })
+          setTickets([]);
+          setError(response.data.message || "Không có vé nào trong lịch sử đặt vé.");
+        }
       } catch (error) {
         console.error("Lỗi lấy lịch sử vé:", error);
         const errorMessage =
@@ -56,7 +61,7 @@ const TicketHistory = () => {
         setLoading(false);
       }
     };
-  
+
     fetchTicketHistory();
   }, [user]);
 
@@ -79,11 +84,11 @@ const TicketHistory = () => {
   // Map trạng thái vé sang nhãn và màu sắc
   const getStatusInfo = (status) => {
     switch (status) {
-      case "confirmed":
-        return { label: "Đã xác nhận", color: "bg-green-100 text-green-700" };
-      case "pending":
-        return { label: "Đang chờ", color: "bg-yellow-100 text-yellow-700" };
-      case "cancelled":
+      case "Đã thanh toán":
+        return { label: "Đã thanh toán", color: "bg-green-100 text-green-700" };
+      case "Chưa thanh toán":
+        return { label: "Chưa thanh toán", color: "bg-yellow-100 text-yellow-700" };
+      case "Đã hủy":
         return { label: "Đã hủy", color: "bg-red-100 text-red-700" };
       default:
         return { label: "Không xác định", color: "bg-gray-100 text-gray-700" };
@@ -133,7 +138,7 @@ const TicketHistory = () => {
           <div className="text-center text-gray-600 py-12">
             <p>Không có vé nào trong lịch sử đặt vé.</p>
             <Link
-              to="/services"
+              to="/search"
               className="text-indigo-600 hover:underline font-semibold mt-4 inline-block"
             >
               Đặt vé ngay
@@ -159,6 +164,12 @@ const TicketHistory = () => {
                   <th className="p-4 text-sm font-semibold text-gray-700">
                     Trạng thái
                   </th>
+                  <th className="p-4 text-sm font-semibold text-gray-700">
+                    Thời gian đặt vé
+                  </th>
+                  <th className="p-4 text-sm font-semibold text-gray-700">
+                    Chi tiết
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -179,8 +190,13 @@ const TicketHistory = () => {
                       <td className="p-4 text-sm text-gray-900">
                         {formatDate(ticket.departure_time)}
                       </td>
-                      <td className="p-4 text-sm text-gray-900">
-                        {ticket.status}
+                      <td className="p-4 text-sm">
+                        <span className={`px-2 py-1 rounded ${color}`}>
+                          {label}
+                        </span>
+                      </td>
+                      <td className="p-4 text-sm text-gray-900"> 
+                        {formatDate(ticket.created_at)}
                       </td>
                       <td className="p-4">
                         <Link
@@ -208,7 +224,7 @@ const TicketHistory = () => {
           </Link>
         </p>
       </div>
-      <BackToTop></BackToTop>
+      <BackToTop />
     </div>
   );
 };

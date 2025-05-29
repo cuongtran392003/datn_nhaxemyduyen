@@ -1,5 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
+import { useAuth } from "./contexts/AuthContext"; // Import useAuth
+import axios from "axios"; // Import axios
 
 function PaymentStatus() {
   const [order, setOrder] = useState(null);
@@ -7,8 +9,18 @@ function PaymentStatus() {
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
   const location = useLocation();
+  const { token, isLoading: authLoading } = useAuth(); // Get token and auth loading state
 
   useEffect(() => {
+    if (authLoading) return; // Wait for auth to initialize
+
+    if (!token) {
+      setError("Vui lòng đăng nhập để xem trạng thái đơn hàng.");
+      setLoading(false);
+      navigate("/login");
+      return;
+    }
+
     const query = new URLSearchParams(location.search);
     const orderId = query.get("vnp_TxnRef");
     const responseCode = query.get("vnp_ResponseCode");
@@ -19,32 +31,23 @@ function PaymentStatus() {
       return;
     }
 
-    fetch(`http://localhost:8000/wp-json/nhaxemyduyen/v1/order/${orderId}`, {
-      method: "GET",
-      headers: {
-        "Content-Type": "application/json",
-      },
-    })
+    axios
+      .get(`http://localhost:8000/wp-json/nhaxemyduyen/v1/order/${orderId}`)
       .then((response) => {
-        if (!response.ok) {
-          throw new Error(`Không tìm thấy đơn hàng (Mã lỗi: ${response.status})`);
-        }
-        return response.json();
-      })
-      .then((data) => {
-        if (!data || typeof data !== "object") {
+        if (!response.data || typeof response.data !== "object") {
           throw new Error("Dữ liệu đơn hàng không hợp lệ.");
         }
-        setOrder(data);
+        setOrder(response.data);
         setLoading(false);
       })
       .catch((err) => {
-        setError("Lỗi khi kiểm tra trạng thái đơn hàng: " + err.message);
+        const message = err.response?.data?.message || err.message;
+        setError("Lỗi khi kiểm tra trạng thái đơn hàng: " + message);
         setLoading(false);
       });
-  }, [location]);
+  }, [location, navigate, token, authLoading]);
 
-  if (loading) {
+  if (loading || authLoading) {
     return (
       <div className="flex justify-center items-center h-screen">
         <div className="text-xl font-semibold text-gray-600">Đang tải...</div>
@@ -166,8 +169,7 @@ function PaymentStatus() {
             </button>
             <button
               onClick={() => navigate("/search")}
-              className="px-4 py-2 bg-blue-500 text-white rounded-lg
-               hover:bg-blue-600 transition-colors"
+              className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
             >
               Tìm chuyến xe khác
             </button>
@@ -182,8 +184,7 @@ function PaymentStatus() {
           <div className="flex justify-center gap-4">
             <button
               onClick={() => navigate("/search")}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg
-               hover:bg-blue-700 transition-colors"
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
             >
               Thử lại
             </button>

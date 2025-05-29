@@ -117,7 +117,15 @@ add_action('rest_api_init', function () {
             return current_user_can('manage_options');
         }
     ));
+
+     
+    
+    
 });
+
+
+
+
 
 /**
  * Lấy thông tin người dùng
@@ -182,9 +190,48 @@ function custom_register_user(WP_REST_Request $request) {
     update_user_meta($user_id, 'last_name', $last_name);
     update_user_meta($user_id, 'phone_number', $phone);
 
+    // Tạo access token
+    $jwt = new \Firebase\JWT\JWT;
+    $secret_key = defined('JWT_AUTH_SECRET_KEY') ? JWT_AUTH_SECRET_KEY : 'your-secret-key';
+    $issued_at = time();
+    $expires_at = $issued_at + (60 * 60); // 1 giờ
+
+    $payload = array(
+        'iss' => get_bloginfo('url'),
+        'iat' => $issued_at,
+        'exp' => $expires_at,
+        'data' => array(
+            'user' => array(
+                'id' => $user_id,
+                'email' => $email,
+            ),
+        ),
+    );
+
+    $access_token = $jwt->encode($payload, $secret_key, 'HS256');
+
+    // Tạo refresh token
+    global $wpdb;
+    $table_name = $wpdb->prefix . 'jwt_tokens';
+    $refresh_token = wp_generate_uuid4();
+    $refresh_expiry = time() + (7 * 24 * 60 * 60); // 7 ngày
+
+    $wpdb->insert(
+        $table_name,
+        array(
+            'user_id' => $user_id,
+            'refresh_token' => $refresh_token,
+            'expiry' => $refresh_expiry,
+        ),
+        array('%d', '%s', '%d')
+    );
+
     return new WP_REST_Response(array(
         'message' => 'Đăng ký thành công! Vui lòng đăng nhập.',
         'user_id' => $user_id,
+        'access_token' => $access_token,
+        'refresh_token' => $refresh_token,
+        'expires_in' => $expires_at,
     ), 200);
 }
 

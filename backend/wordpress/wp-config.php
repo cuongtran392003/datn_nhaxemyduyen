@@ -115,6 +115,8 @@ $table_prefix = getenv_docker('WORDPRESS_TABLE_PREFIX', 'wp_');
  */
 define( 'WP_DEBUG', !!getenv_docker('WORDPRESS_DEBUG', '') );
 
+
+
 /* Add any custom values between this line and the "stop editing" line. */
 
 // If we're behind a proxy server and using HTTPS, we need to alert WordPress of that fact
@@ -146,6 +148,8 @@ header('Access-Control-Allow-Credentials: true' );
 define( 'CORS_ENABLED','true' );
 define('JWT_AUTH_CORS_ENABLE', true);
 define('JWT_AUTH_SECRET_KEY', 'your-very-secure-secret-key-here');
+
+
 
 // define('WP_HOME', 'https://18a7-113-165-148-205.ngrok-free.app');
 // define('WP_SITEURL', 'https://18a7-113-165-148-205.ngrok-free.app');

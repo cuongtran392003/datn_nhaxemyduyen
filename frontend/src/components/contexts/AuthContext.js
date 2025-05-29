@@ -1,16 +1,45 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 import axios from "axios";
 
-const API_BASE_URL = "http://localhost:8000/wp-json";
+const API_BASE_URL = process.env.REACT_APP_API_BASE_URL;
 
 const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [token, setToken] = useState(localStorage.getItem("token") || null);
+  const [refreshToken, setRefreshToken] = useState(localStorage.getItem("refreshToken") || null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Cấu hình Axios để thêm token vào tiêu đề Authorization
+  // Xử lý lỗi 401 và làm mới token
+  useEffect(() => {
+    const interceptor = axios.interceptors.response.use(
+      (response) => response,
+      async (error) => {
+        if (error.response?.status === 401 && refreshToken) {
+          try {
+            const response = await axios.post(`${API_BASE_URL}/jwt-auth/v1/token/refresh`, {
+              refresh_token: refreshToken,
+            });
+            const newToken = response.data.token;
+            setToken(newToken);
+            localStorage.setItem("token", newToken);
+            error.config.headers["Authorization"] = `Bearer ${newToken}`;
+            return axios(error.config); // Thử lại yêu cầu gốc
+          } catch (refreshError) {
+            console.error("Lỗi làm mới token:", refreshError);
+            logout();
+            alert("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.");
+            window.location.href = "/login";
+          }
+        }
+        return Promise.reject(error);
+      }
+    );
+
+    return () => axios.interceptors.response.eject(interceptor);
+  }, [refreshToken]);
+
   useEffect(() => {
     if (token) {
       axios.defaults.headers.common["Authorization"] = `Bearer ${token}`;
@@ -25,7 +54,6 @@ export const AuthProvider = ({ children }) => {
         throw new Error("Vui lòng nhập email và mật khẩu.");
       }
 
-      // Đăng nhập qua JWT
       const response = await axios.post(
         `${API_BASE_URL}/jwt-auth/v1/token`,
         {
@@ -39,16 +67,14 @@ export const AuthProvider = ({ children }) => {
         }
       );
 
-      console.log("Phản hồi JWT:", response.data);
-
       if (!response.data.token) {
         throw new Error("Không nhận được token từ server.");
       }
 
       const token = response.data.token;
+      const refreshToken = response.data.refresh_token;
       let user_id = response.data.user_id;
 
-      // Nếu user_id không có, lấy từ /wp/v2/users/me
       if (!user_id) {
         const meResponse = await axios.get(`${API_BASE_URL}/wp/v2/users/me`, {
           headers: {
@@ -56,27 +82,17 @@ export const AuthProvider = ({ children }) => {
           },
         });
         user_id = meResponse.data.id;
-        console.log("Lấy user_id từ /wp/v2/users/me:", user_id);
       }
 
       if (!user_id) {
         throw new Error("Không thể lấy user_id.");
       }
 
-      // Lấy thông tin chi tiết người dùng
-      const userResponse = await axios
-        .get(`${API_BASE_URL}/custom/v1/user/${user_id}`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        })
-        .catch((error) => {
-          console.error(
-            "Lỗi khi lấy dữ liệu người dùng:",
-            error.response?.data || error.message
-          );
-          throw error;
-        });
+      const userResponse = await axios.get(`${API_BASE_URL}/custom/v1/user/${user_id}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
 
       const userData = {
         id: user_id,
@@ -91,8 +107,10 @@ export const AuthProvider = ({ children }) => {
 
       setUser(userData);
       setToken(token);
+      setRefreshToken(refreshToken);
       localStorage.setItem("user", JSON.stringify(userData));
       localStorage.setItem("token", token);
+      localStorage.setItem("refreshToken", refreshToken);
       localStorage.setItem("isLoggedIn", "true");
 
       return true;
@@ -110,18 +128,19 @@ export const AuthProvider = ({ children }) => {
     const newUserData = {
       ...user,
       ...updatedUserData,
-      token: user.token, // Giữ nguyên token
+      token: user.token,
     };
     setUser(newUserData);
     localStorage.setItem("user", JSON.stringify(newUserData));
-    console.log("Cập nhật thông tin người dùng:", newUserData);
   };
 
   const logout = () => {
     setUser(null);
     setToken(null);
+    setRefreshToken(null);
     localStorage.removeItem("user");
     localStorage.removeItem("token");
+    localStorage.removeItem("refreshToken");
     localStorage.removeItem("isLoggedIn");
   };
 
@@ -130,9 +149,10 @@ export const AuthProvider = ({ children }) => {
       setIsLoading(true);
       const storedUser = localStorage.getItem("user");
       const storedToken = localStorage.getItem("token");
+      const storedRefreshToken = localStorage.getItem("refreshToken");
       const isLoggedIn = localStorage.getItem("isLoggedIn");
 
-      if (storedUser && storedToken && isLoggedIn === "true") {
+      if (storedUser && storedToken && storedRefreshToken && isLoggedIn === "true") {
         try {
           const parsedUser = JSON.parse(storedUser);
           if (!parsedUser.id) {
@@ -140,8 +160,8 @@ export const AuthProvider = ({ children }) => {
           }
           setUser(parsedUser);
           setToken(storedToken);
+          setRefreshToken(storedRefreshToken);
 
-          // Kiểm tra token hợp lệ
           await axios.get(`${API_BASE_URL}/wp/v2/users/me`, {
             headers: {
               Authorization: `Bearer ${storedToken}`,

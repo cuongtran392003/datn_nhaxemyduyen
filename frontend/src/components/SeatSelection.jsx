@@ -1,9 +1,11 @@
-// File: SeatSelection.js
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import ticketService from "../service/ticketService";
+import { useAuth } from "./contexts/AuthContext";
 
 function SeatSelection({ selectedTrip, onBack }) {
+  const navigate = useNavigate(); // Moved to the top
+  const { user, token } = useAuth();
   const [step, setStep] = useState(1);
   const [selectedSeats, setSelectedSeats] = useState([]);
   const [bookedSeats, setBookedSeats] = useState([]);
@@ -26,7 +28,23 @@ function SeatSelection({ selectedTrip, onBack }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  const navigate = useNavigate();
+  useEffect(() => {
+    if (!user || !token) {
+      setError("Vui lòng đăng nhập để đặt vé.");
+      navigate("/login"); // Now safe to use
+    }
+  }, [user, token, navigate]);
+
+  useEffect(() => {
+    if (user) {
+      setUserInfo({
+        name: user.first_name || "",
+        phone: user.phone_number || "",
+        email: user.email || "",
+        note: "",
+      });
+    }
+  }, [user]);
 
   const isValidEmail = (email) => {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
@@ -208,7 +226,6 @@ function SeatSelection({ selectedTrip, onBack }) {
 
       // Chuyển hướng người dùng đến URL thanh toán VNPAY
       window.location.href = paymentResponse.payment_url;
-
     } catch (err) {
       console.error("Error during payment:", err);
       setError(

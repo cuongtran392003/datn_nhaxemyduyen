@@ -12,7 +12,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useState } from "react";
 import { useAuth } from "../contexts/AuthContext";
 
-const API_BASE_URL = "http://localhost:8000/wp-json"; // Điều chỉnh theo URL WordPress của bạn
+const API_BASE_URL = process.env.REACT_APP_API_BASE_URL; // Điều chỉnh theo URL WordPress của bạn
 
 function SignUp() {
   const [firstName, setFirstName] = useState("");
@@ -27,11 +27,13 @@ function SignUp() {
   const navigate = useNavigate();
   const { login } = useAuth();
 
+  
   const handleSignUp = async (e) => {
     e.preventDefault();
     setError("");
     setSuccess("");
     setLoading(true);
+
 
     // Kiểm tra các trường bắt buộc
     if (!firstName || !lastName || !email || !phone || !password) {
