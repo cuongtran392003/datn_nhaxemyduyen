@@ -1,7 +1,19 @@
+@import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+.font-montserrat {
+  font-family: 'Montserrat', 'Poppins', Arial, Helvetica, sans-serif;
+}
+.font-roboto {
+  font-family: 'Roboto', 'Poppins', Arial, Helvetica, sans-serif;
+}
+
+body {
+  @apply font-roboto;
+}
 
 p{
     @apply text-textmobile leading-4 md:text-[14px] md:leading-7;

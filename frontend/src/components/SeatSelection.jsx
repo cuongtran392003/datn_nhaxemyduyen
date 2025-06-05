@@ -38,7 +38,7 @@ function SeatSelection({ selectedTrip, onBack }) {
   useEffect(() => {
     if (user) {
       setUserInfo({
-        name: user.first_name || "",
+        name: `${user.first_name} ${user.last_name}` || "",
         phone: user.phone_number || "",
         email: user.email || "",
         note: "",
@@ -395,55 +395,68 @@ function SeatSelection({ selectedTrip, onBack }) {
         </>
       )}
       {step === 3 && (
-        <>
-          <h3 className="text-lg font-semibold mb-4 text-gray-700">
+        <div className="bg-gradient-to-br from-blue-50 via-white to-green-50 p-8 rounded-2xl shadow-xl border-2 border-blue-100 max-w-xl mx-auto mb-6">
+          <h3 className="text-2xl font-extrabold mb-6 text-blue-700 flex items-center gap-2 justify-center font-montserrat">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
             Nhập thông tin khách hàng
           </h3>
-          <div className="flex flex-col gap-4 mb-4">
-            <input
-              className="border p-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 shadow-sm"
-              placeholder="Họ tên"
-              value={userInfo.name}
-              onChange={(e) =>
-                setUserInfo((prev) => ({ ...prev, name: e.target.value }))
-              }
-            />
-            <input
-              className="border p-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 shadow-sm"
-              placeholder="Số điện thoại"
-              value={userInfo.phone}
-              onChange={(e) =>
-                setUserInfo((prev) => ({ ...prev, phone: e.target.value }))
-              }
-            />
-            <input
-              className="border p-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 shadow-sm"
-              placeholder="Email"
-              value={userInfo.email}
-              onChange={(e) =>
-                setUserInfo((prev) => ({ ...prev, email: e.target.value }))
-              }
-            />
-            <input
-              className="border p-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 shadow-sm"
-              placeholder="Ghi chú"
-              value={userInfo.note}
-              onChange={(e) =>
-                setUserInfo((prev) => ({ ...prev, note: e.target.value }))
-              }
-            />
+          <div className="flex flex-col gap-6 mb-4 font-roboto">
+            <div>
+              <label className="block mb-1 font-semibold text-gray-600">Họ tên</label>
+              <input
+                className="border-2 border-blue-200 p-3 rounded-xl w-full focus:ring-2 focus:ring-blue-400 focus:border-blue-400 shadow-sm text-lg"
+                placeholder="Họ tên"
+                value={userInfo.name}
+                onChange={(e) =>
+                  setUserInfo((prev) => ({ ...prev, name: e.target.value }))
+                }
+              />
+            </div>
+            <div>
+              <label className="block mb-1 font-semibold text-gray-600">Số điện thoại</label>
+              <input
+                className="border-2 border-blue-200 p-3 rounded-xl w-full focus:ring-2 focus:ring-blue-400 focus:border-blue-400 shadow-sm text-lg"
+                placeholder="Số điện thoại"
+                value={userInfo.phone}
+                onChange={(e) =>
+                  setUserInfo((prev) => ({ ...prev, phone: e.target.value }))
+                }
+              />
+            </div>
+            <div>
+              <label className="block mb-1 font-semibold text-gray-600">Email</label>
+              <input
+                className="border-2 border-blue-200 p-3 rounded-xl w-full focus:ring-2 focus:ring-blue-400 focus:border-blue-400 shadow-sm text-lg"
+                placeholder="Email"
+                value={userInfo.email}
+                onChange={(e) =>
+                  setUserInfo((prev) => ({ ...prev, email: e.target.value }))
+                }
+              />
+            </div>
+            <div>
+              <label className="block mb-1 font-semibold text-gray-600">Ghi chú</label>
+              <input
+                className="border-2 border-blue-200 p-3 rounded-xl w-full focus:ring-2 focus:ring-blue-400 focus:border-blue-400 shadow-sm text-lg"
+                placeholder="Ghi chú"
+                value={userInfo.note}
+                onChange={(e) =>
+                  setUserInfo((prev) => ({ ...prev, note: e.target.value }))
+                }
+              />
+            </div>
           </div>
-          <div className="flex justify-between">
+          <div className="flex justify-between mt-6">
             <button
               onClick={() => setStep(2)}
-              className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-bluecustom transition-colors"
+              className="px-6 py-3 bg-blue-500 text-white rounded-xl hover:bg-bluecustom transition-colors font-semibold font-montserrat"
             >
               Quay lại
             </button>
             <button
               onClick={handlePayment}
               disabled={loading}
-              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 flex items-center gap-2"
+              className="px-6 py-3 bg-green-600 text-white rounded-xl hover:bg-green-700 transition-colors disabled:opacity-50 flex items-center gap-2 font-semibold font-montserrat"
             >
               {loading ? (
                 "Đang xử lý..."
@@ -466,7 +479,7 @@ function SeatSelection({ selectedTrip, onBack }) {
               )}
             </button>
           </div>
-        </>
+        </div>
       )}
     </div>
   );

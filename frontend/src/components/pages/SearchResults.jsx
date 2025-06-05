@@ -1,6 +1,5 @@
 import { useLocation } from "react-router-dom";
 import { useEffect, useState, useMemo } from "react";
-import { Link } from "react-router-dom";
 import TripCard from "../TripCard";
 import SeatSelection from "../SeatSelection";
 import route_no_schedule_2 from "../../assets/images/route-no-schedule-2.png";
@@ -37,47 +36,73 @@ function SearchResults() {
     });
   };
 
-  const [currentTime, setCurrentTime] = useState(new Date());
-  useEffect(() => {
-    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
-    return () => clearInterval(timer);
-  }, []);
+  // Hàm kiểm tra chuyến xe có phải hiện tại hoặc tương lai không
+  const isFutureOrTodayTrip = (departureTimeStr) => {
+    if (!departureTimeStr) return false;
+    const dep = new Date(departureTimeStr);
+    if (isNaN(dep.getTime())) return false;
+    const now = new Date();
+    // So sánh từ 00:00 hôm nay
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    return dep >= today;
+  };
+
+  // Helper: normalize date string to yyyy-MM-dd (local, not UTC)
+  const normalizeDate = (dateString) => {
+    if (!dateString) return "";
+    // yyyy-MM-dd
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) return dateString;
+    // dd/MM/yyyy or MM/dd/yyyy
+    if (/^\d{2}\/\d{2}\/\d{4}$/.test(dateString)) {
+      const [a, b, c] = dateString.split("/");
+      // Luôn ưu tiên dd/MM/yyyy cho người Việt Nam, kể cả khi a <= 12 và b <= 12
+      return `${c}-${b.padStart(2, "0")}-${a.padStart(2, "0")}`;
+    }
+    // Fallback: try Date
+    const d = new Date(dateString);
+    if (!isNaN(d.getTime())) {
+      return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+    }
+    return dateString;
+  };
 
   useEffect(() => {
     if (initialTrips && Array.isArray(initialTrips)) {
       setIsLoading(true);
-      const formattedTrips = initialTrips.map((trip) => {
-        const departureTime = trip.departure_time ? new Date(trip.departure_time) : null;
-        let timeCategory = "Không xác định";
-        let formattedDepartureTime = "Không xác định";
+      // Lọc đúng ngày (so sánh yyyy-MM-dd)
+      const normalizedDate = normalizeDate(date);
+      const formattedTrips = initialTrips
+        .filter((trip) => {
+          const tripDate = trip.departure_time ? normalizeDate(trip.departure_time) : "";
+          // Không cần kiểm tra isFutureOrTodayTrip vì đã lọc ở Routepopular
+          return tripDate === normalizedDate;
+        })
+        .map((trip) => {
+          const departureTime = trip.departure_time ? new Date(trip.departure_time) : null;
+          let timeCategory = "Không xác định";
 
-        if (departureTime && !isNaN(departureTime.getTime())) {
-          const hours = departureTime.getHours();
-          if (hours >= 5 && hours < 12) timeCategory = "Morning";
-          else if (hours >= 12 && hours < 17) timeCategory = "Afternoon";
-          else timeCategory = "Evening";
+          if (departureTime && !isNaN(departureTime.getTime())) {
+            const hours = departureTime.getHours();
+            if (hours >= 5 && hours < 12) timeCategory = "Morning";
+            else if (hours >= 12 && hours < 17) timeCategory = "Afternoon";
+            else timeCategory = "Evening";
+          } else {
+            console.warn(`Invalid departure time for trip ${trip.trip_id}: ${trip.departure_time}`);
+          }
 
-          formattedDepartureTime = departureTime.toLocaleTimeString("vi-VN", {
-            hour: "2-digit",
-            minute: "2-digit",
-          });
-        } else {
-          console.warn(`Invalid departure time for trip ${trip.trip_id}: ${trip.departure_time}`);
-        }
-
-        return {
-          id: trip.trip_id || `trip-${Math.random()}`,
-          pickup_location: trip.pickup_location || "Không xác định",
-          dropoff_location: trip.dropoff_location || "Không xác định",
-          date: formatDate(date),
-          time: timeCategory,
-          price: parseFloat(trip.price) || 0,
-          availableSeats: parseInt(trip.available_seats) || 0,
-          bus_image: trip.bus_image || "",
-          company: "Nhà Xe Mỹ Duyên",
-          departure_time: trip.departure_time || "",
-        };
-      });
+          return {
+            id: trip.trip_id || `trip-${Math.random()}`,
+            pickup_location: trip.pickup_location || "Không xác định",
+            dropoff_location: trip.dropoff_location || "Không xác định",
+            date: formatDate(normalizedDate),
+            time: timeCategory,
+            price: parseFloat(trip.price) || 0,
+            availableSeats: parseInt(trip.available_seats) || 0,
+            bus_image: trip.bus_image || "",
+            company: "Nhà Xe Mỹ Duyên",
+            departure_time: trip.departure_time || "",
+          };
+        });
       setTrips(formattedTrips);
       setIsLoading(false);
     } else {
@@ -86,6 +111,42 @@ function SearchResults() {
       console.warn("No valid initialTrips provided in location.state");
     }
   }, [initialTrips, date]);
+
+  // Nếu được chuyển từ nút 'Tìm chuyến xe khác', hiển thị tất cả chuyến xe hiện tại và tương lai
+  useEffect(() => {
+    if (location.state?.reset) {
+      setIsLoading(true);
+      tripService.getTrips()
+        .then((allTrips) => {
+          const formattedTrips = allTrips
+            .filter((trip) => isFutureOrTodayTrip(trip.departure_time))
+            .map((trip) => {
+              const departureTime = trip.departure_time ? new Date(trip.departure_time) : null;
+              let timeCategory = "Không xác định";
+              if (departureTime && !isNaN(departureTime.getTime())) {
+                const hours = departureTime.getHours();
+                if (hours >= 5 && hours < 12) timeCategory = "Morning";
+                else if (hours >= 12 && hours < 17) timeCategory = "Afternoon";
+                else timeCategory = "Evening";
+              }
+              return {
+                id: trip.trip_id || `trip-${Math.random()}`,
+                pickup_location: trip.pickup_location || "Không xác định",
+                dropoff_location: trip.dropoff_location || "Không xác định",
+                date: trip.departure_time ? formatDate(trip.departure_time) : "Không xác định",
+                time: timeCategory,
+                price: parseFloat(trip.price) || 0,
+                availableSeats: parseInt(trip.available_seats) || 0,
+                bus_image: trip.bus_image || "",
+                company: "Nhà Xe Mỹ Duyên",
+                departure_time: trip.departure_time || "",
+              };
+            });
+          setTrips(formattedTrips);
+        })
+        .finally(() => setIsLoading(false));
+    }
+  }, [location.state]);
 
   const filteredTrips = useMemo(() => {
     setIsLoading(true);
@@ -147,7 +208,58 @@ function SearchResults() {
     setSortOption("");
   };
 
-  if (!initialTrips || !departure || !destination || !date) {
+  // Polling để cập nhật danh sách chuyến xe nhưng không render lại giao diện nếu không có thay đổi
+  useEffect(() => {
+    let pollingInterval;
+    let lastTripsJson = JSON.stringify(trips);
+    const pollTrips = async () => {
+      try {
+        const allTrips = await tripService.getTrips();
+        // Lọc đúng ngày hiện tại (local) và đúng tuyến đường
+        const normalizedDate = normalizeDate(date);
+        const filtered = allTrips.filter((trip) => {
+          const tripDate = trip.departure_time ? normalizeDate(trip.departure_time) : "";
+          // Lọc đúng tuyến đường (from_location, to_location)
+          return tripDate === normalizedDate &&
+            trip.from_location === departure &&
+            trip.to_location === destination;
+        });
+        const newTripsJson = JSON.stringify(filtered);
+        if (newTripsJson !== lastTripsJson) {
+          setTrips(filtered.map((trip) => ({
+            id: trip.trip_id || `trip-${Math.random()}`,
+            pickup_location: trip.pickup_location || "Không xác định",
+            dropoff_location: trip.dropoff_location || "Không xác định",
+            date: formatDate(normalizedDate),
+            time: (() => {
+              const departureTime = trip.departure_time ? new Date(trip.departure_time) : null;
+              if (departureTime && !isNaN(departureTime.getTime())) {
+                const hours = departureTime.getHours();
+                if (hours >= 5 && hours < 12) return "Morning";
+                if (hours >= 12 && hours < 17) return "Afternoon";
+                return "Evening";
+              }
+              return "Không xác định";
+            })(),
+            price: parseFloat(trip.price) || 0,
+            availableSeats: parseInt(trip.available_seats) || 0,
+            bus_image: trip.bus_image || "",
+            company: "Nhà Xe Mỹ Duyên",
+            departure_time: trip.departure_time || "",
+          })));
+          lastTripsJson = newTripsJson;
+        }
+      } catch (err) {
+        // Có thể log lỗi nếu cần
+      }
+    };
+    if (date) {
+      pollingInterval = setInterval(pollTrips, 3000);
+    }
+    return () => clearInterval(pollingInterval);
+  }, [date, trips, departure, destination]);
+
+  if ((!initialTrips || !departure || !destination || !date) && !location.state?.reset) {
     return (
       <div>
         
@@ -175,26 +287,26 @@ function SearchResults() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-100 font-roboto">
       {/* Search Form Section - Positioned at the very top */}
-      <section className="shadow-lg z-30 relative mx-48 rounded-xl py-8 px-10 sm:px-6 lg:px-8">
-          <SearchForm />
+      <section className="shadow-2xl z-30 relative mx-2 md:mx-24 lg:mx-48 rounded-2xl py-8 px-4 sm:px-6 lg:px-8 bg-white/90 border border-blue-100 mt-4 mb-8">
+        <SearchForm />
       </section>
 
-      <main className="max-w-7xl mx-auto py-10 px-4 sm:px-6 lg:px-8">
+      <main className="max-w-7xl mx-auto py-10 px-2 sm:px-6 lg:px-8">
         <div className="flex flex-col lg:flex-row gap-8">
           {/* Filter Sidebar */}
           <aside
-            className={`fixed inset-y-0 left-0 w-80 bg-white shadow-xl rounded-r-2xl transform transition-transform duration-300 ease-in-out z-30 lg:static lg:w-1/4 lg:transform-none lg:rounded-2xl lg:p-6 ${
+            className={`fixed inset-y-0 left-0 w-80 bg-white shadow-2xl rounded-r-3xl border-r-4 border-blue-200 transform transition-transform duration-300 ease-in-out z-30 lg:static lg:w-1/4 lg:transform-none lg:rounded-2xl lg:p-6 ${
               isFilterOpen ? "translate-x-0" : "-translate-x-full"
             }`}
             aria-label="Bộ lọc chuyến xe"
           >
             <div className="flex items-center justify-between p-4 lg:p-0 border-b border-gray-200 lg:border-0">
-              <h2 className="text-xl font-semibold text-gray-800 flex items-center gap-2">
+              <h2 className="text-2xl font-bold text-blue-700 flex items-center gap-2 font-montserrat">
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
-                  className="h-5 w-5 text-blue-600"
+                  className="h-6 w-6 text-blue-600"
                   viewBox="0 0 20 20"
                   fill="currentColor"
                 >
@@ -204,7 +316,7 @@ function SearchResults() {
                     clipRule="evenodd"
                   />
                 </svg>
-                Lọc Chuyến Xe
+                Bộ lọc chuyến xe
               </h2>
               <button
                 onClick={() => setIsFilterOpen(false)}
@@ -227,9 +339,9 @@ function SearchResults() {
                 </svg>
               </button>
             </div>
-            <div className="p-4 lg:p-0 space-y-5">
+            <div className="p-4 lg:p-0 space-y-6">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-1.5">
+                <label className="flex text-sm font-medium text-gray-700 mb-2 items-center gap-1.5">
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
                     className="h-4 w-4 text-gray-500"
@@ -257,7 +369,7 @@ function SearchResults() {
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-1.5">
+                <label className="flex text-sm font-medium text-gray-700 mb-2 items-center gap-1.5">
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
                     className="h-4 w-4 text-gray-500"
@@ -279,7 +391,7 @@ function SearchResults() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-1.5">
+                <label className="flex text-sm font-medium text-gray-700 mb-2 items-center gap-1.5">
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
                     className="h-4 w-4 text-gray-500"
@@ -301,7 +413,7 @@ function SearchResults() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-1.5">
+                <label className="flex text-sm font-medium text-gray-700 mb-2 items-center gap-1.5">
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
                     className="h-4 w-4 text-gray-500"
@@ -331,7 +443,7 @@ function SearchResults() {
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-1.5">
+                <label className="flex text-sm font-medium text-gray-700 mb-2 items-center gap-1.5">
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
                     className="h-4 w-4 text-gray-500"
@@ -376,7 +488,7 @@ function SearchResults() {
             <div className="lg:hidden mb-6">
               <button
                 onClick={() => setIsFilterOpen(true)}
-                className="w-full bg-blue-600 text-white py-2.5 px-4 rounded-md flex items-center justify-center gap-2 hover:bg-blue-700 transition-all duration-200 font-medium shadow-sm"
+                className="w-full bg-gradient-to-r from-blue-600 to-indigo-500 text-white py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 hover:from-blue-700 hover:to-indigo-600 transition-all duration-200 font-semibold font-montserrat shadow-lg"
                 aria-label="Mở bộ lọc"
               >
                 <svg
@@ -396,20 +508,20 @@ function SearchResults() {
             </div>
 
             {/* Search Results Header */}
-            <div className="bg-white rounded-xl shadow-lg p-6 mb-6">
-              <h1 className="text-2xl font-bold text-gray-800 mb-3">
+            <div className="bg-white rounded-2xl shadow-xl p-8 mb-6 border border-blue-100">
+              <h1 className="text-3xl font-extrabold text-indigo-700 mb-3 font-montserrat">
                 Kết quả tìm kiếm: {departure} → {destination} | {formatDate(date)}
               </h1>
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
-                <p className="text-gray-500 text-sm mb-3 sm:mb-0">
+                <p className="text-blue-600 text-lg mb-3 sm:mb-0 font-montserrat">
                   {filteredTrips.length} chuyến xe được tìm thấy
                 </p>
                 <div className="flex items-center gap-3">
-                  <label className="text-sm font-medium text-gray-700">Sắp xếp theo</label>
+                  <label className="text-base font-medium text-gray-700 font-roboto">Sắp xếp theo</label>
                   <select
                     value={sortOption}
                     onChange={(e) => setSortOption(e.target.value)}
-                    className="w-full sm:w-48 border-gray-300 rounded-md py-2.5 px-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm transition-all duration-200 bg-white shadow-sm"
+                    className="w-full sm:w-48 border-gray-300 rounded-lg py-2.5 px-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-base transition-all duration-200 bg-white shadow-sm font-roboto"
                     aria-label="Sắp xếp kết quả"
                   >
                     <option value="">Mặc định</option>
@@ -428,7 +540,7 @@ function SearchResults() {
                 {[...Array(4)].map((_, index) => (
                   <div
                     key={index}
-                    className="bg-white rounded-xl shadow-lg p-6 animate-pulse"
+                    className="bg-white rounded-2xl shadow-lg p-8 animate-pulse border border-blue-100"
                   >
                     <div className="h-4 bg-gray-200 rounded w-3/4 mb-4"></div>
                     <div className="h-4 bg-gray-200 rounded w-1/2 mb-4"></div>
@@ -437,13 +549,13 @@ function SearchResults() {
                 ))}
               </div>
             ) : filteredTrips.length === 0 ? (
-              <section className="bg-white rounded-xl shadow-lg p-8 text-center">
+              <section className="bg-white rounded-2xl shadow-lg p-10 text-center border border-blue-100">
                 <img
                   src={route_no_schedule_2}
                   alt="Không có chuyến xe nào"
                   className="max-w-full h-auto max-h-48 mx-auto mb-6"
                 />
-                <p className="text-gray-500 text-base mb-6 leading-relaxed">
+                <p className="text-gray-500 text-lg mb-6 leading-relaxed font-roboto">
                   Không tìm thấy chuyến xe nào từ <strong>{departure}</strong> đến{" "}
                   <strong>{destination}</strong> vào ngày {formatDate(date)}.
                   <br />
@@ -451,19 +563,18 @@ function SearchResults() {
                 </p>
                 <a
                   href="tel:190011112222"
-                  className="inline-block bg-blue-600 text-white px-6 py-2.5 rounded-md hover:bg-blue-700 transition-all duration-200 font-medium shadow-sm"
+                  className="inline-block bg-gradient-to-r from-blue-600 to-indigo-500 text-white px-8 py-3 rounded-xl hover:from-blue-700 hover:to-indigo-600 transition-all duration-200 font-semibold font-montserrat shadow-lg"
                   aria-label="Liên hệ hotline"
                 >
                   Gọi Hotline: 1900 1111 2222
                 </a>
               </section>
             ) : (
-              <ul className="flex flex-col md:flex-col gap-6">
+              <ul className="flex flex-col md:flex-col gap-8">
                 {filteredTrips.map((trip) => (
                   <li
                     key={trip.id}
-                    className="bg-white rounded-xl shadow-lg hover:shadow-xl 
-                    hover:scale-[1.02] transition-all duration-300 overflow-hidden"
+                    className="bg-white rounded-2xl shadow-xl hover:shadow-2xl hover:scale-[1.02] transition-all duration-300 overflow-hidden border border-blue-100 font-montserrat"
                   >
                     <TripCard
                       trip={trip}
@@ -478,7 +589,7 @@ function SearchResults() {
                         }`}
                       >
                         <div className="fixed inset-0 bg-gray-800 bg-opacity-50 flex items-center justify-center z-50 lg:static lg:bg-transparent lg:p-4 lg:border-t lg:border-gray-200">
-                          <div className="bg-white p-6 rounded-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto lg:max-w-full lg:p-0 shadow-2xl lg:shadow-none">
+                          <div className="bg-white p-6 rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto lg:max-w-full lg:p-0 shadow-2xl lg:shadow-none">
                             <div className="flex justify-end mb-4 lg:hidden">
                               <button
                                 onClick={() => setExpandedTripId(null)}

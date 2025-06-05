@@ -1,9 +1,9 @@
 function ServiceCustomer({ image, title, description, IconDescription = {} }) {
   const { icon, descriptionIcon } = IconDescription;
   return (
-    <div className="flex flex-col items-center md:items-start max-w-sm mx-auto bg-white rounded-xl shadow-md hover:shadow-lg transition-shadow duration-300 p-4">
+    <div className="flex flex-col items-center md:items-start max-w-sm mx-auto bg-white rounded-2xl shadow-xl hover:shadow-2xl hover:scale-105 transition-all duration-300 p-6 font-roboto">
       <img
-        className="w-full h-48 object-cover rounded-lg mb-4"
+        className="w-full h-48 object-cover rounded-xl mb-4 drop-shadow-lg"
         src={image}
         alt={title}
       />
@@ -16,7 +16,7 @@ function ServiceCustomer({ image, title, description, IconDescription = {} }) {
       <hr className="w-12 md:w-56 h-1 bg-red-500 rounded mb-4" />
       {icon && descriptionIcon && (
         <div className="flex flex-row items-center gap-x-3">
-          <img src={icon} alt="icon" className="w-7 h-7" />
+          <img src={icon} alt="icon" className="w-7 h-7 drop-shadow-md" />
           <p className="text-gray-700 text-sm md:text-base">
             {descriptionIcon}
           </p>

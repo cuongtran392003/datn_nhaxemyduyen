@@ -43,7 +43,7 @@ function ResetPassword() {
 
     const requestBody = {
       user_login: email,
-      reset_key: resetKey,
+      reset_key: decodeURIComponent(resetKey), // Đảm bảo truyền đúng key đã decode
       new_password: newPassword,
     };
     console.log("Gửi yêu cầu đặt lại mật khẩu:", requestBody);
@@ -57,9 +57,22 @@ function ResetPassword() {
       setTimeout(() => navigate("/signin"), 3000);
     } catch (err) {
       console.error("Lỗi đặt lại mật khẩu:", err.response?.data);
-      setError(
-        err.response?.data?.message || "Đã có lỗi xảy ra. Vui lòng thử lại."
-      );
+      const apiMsg =
+        err.response?.data?.message ||
+        "Đã có lỗi xảy ra. Vui lòng thử lại.";
+      if (
+        apiMsg.includes("Liên kết đặt lại không hợp lệ") ||
+        apiMsg.includes("Liên kết đặt lại đã hết hạn")
+      ) {
+        setError(
+          apiMsg +
+            " Vui lòng gửi lại yêu cầu quên mật khẩu để nhận liên kết mới."
+        );
+      } else if (apiMsg.includes("Vui lòng điền đầy đủ thông tin")) {
+        setError("Vui lòng nhập đầy đủ thông tin và thử lại.");
+      } else {
+        setError(apiMsg);
+      }
     } finally {
       setLoading(false);
     }

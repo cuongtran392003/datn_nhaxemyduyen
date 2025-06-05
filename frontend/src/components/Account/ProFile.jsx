@@ -4,8 +4,6 @@ import { Link, useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { useAuth } from "../contexts/AuthContext";
 
-
-
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL;
 
 function ProFile() {
@@ -22,7 +20,6 @@ function ProFile() {
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
   const [avatarLoading, setAvatarLoading] = useState(false);
-
 
   // Cập nhật state từ user
   useEffect(() => {
@@ -129,42 +126,44 @@ function ProFile() {
     return `${firstInitial}${lastInitial}`.toUpperCase();
   };
 
-  const formatDate=(dateString) =>{
-    if(!dateString) return "";
-    const d= new Date(dateString);
+  const formatDate = (dateString) => {
+    if (!dateString) return "";
+    const d = new Date(dateString);
 
     // dinh dang YYYY-MM-DD HH:mm:ss
-    return `${String(d.getDate()).padStart(2, "0")} -${String(d.getMonth() + 1).padStart(2, "0")}-${d.getFullYear()}
-    ${String(d.getHours()).padStart(2, "0")};`
-  }
+    return `${String(d.getDate()).padStart(2, "0")} -${String(
+      d.getMonth() + 1
+    ).padStart(2, "0")}-${d.getFullYear()} ${String(d.getHours()).padStart(
+      2,
+      "0"
+    )};`;
+  };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-100 via-purple-100 to-pink-100 flex items-center justify-center p-6">
-      <div className="w-full max-w-5xl bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col md:flex-row">
+    <div className="min-h-screen bg-gradient-to-br from-[#e0e7ff] via-[#f3e8ff] to-[#ffe4e6] flex items-center justify-center p-6 font-roboto">
+      <div className="w-full max-w-5xl bg-white/80 backdrop-blur-lg rounded-3xl shadow-2xl overflow-hidden flex flex-col md:flex-row border border-white/40 font-roboto">
         {/* Left Section: Avatar & Summary */}
-        <div className="w-full md:w-1/3 bg-gradient-to-b from-indigo-500 to-purple-600 p-8 flex flex-col items-center justify-center text-white">
-          <div className="relative group mb-6">
-            <div className="w-32 h-32 rounded-full bg-white/20 flex items-center justify-center overflow-hidden border-4 border-white/30 shadow-lg">
+        <div className="w-full md:w-1/3 bg-gradient-to-b from-indigo-600 to-purple-500 p-10 flex flex-col items-center justify-center text-white relative font-roboto">
+          <div className="relative group mb-8">
+            <div className="w-36 h-36 rounded-full bg-white/20 flex items-center justify-center overflow-hidden border-4 border-gradient-to-br from-pink-400 via-indigo-400 to-purple-400 shadow-2xl ring-4 ring-white/30 transition-all duration-300 group-hover:scale-105">
               {avatarPreview ? (
                 <img
                   src={avatarPreview}
                   alt="Avatar"
-                  className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                  className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
                   onError={() => setAvatarPreview("")}
                 />
               ) : (
-                <span className="text-3xl font-bold text-white">
+                <span className="text-4xl font-extrabold text-white drop-shadow-lg">
                   {getInitials()}
                 </span>
               )}
             </div>
             <label
               htmlFor="avatar-upload"
-              className="absolute inset-0 flex items-center 
-              justify-center bg-black bg-opacity-60 rounded-full 
-              opacity-0 group-hover:opacity-100 transition-opacity duration-300 cursor-pointer"
+              className="absolute inset-0 flex items-center justify-center bg-black/60 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-300 cursor-pointer"
             >
-              <FaCamera className="text-white text-2xl" />
+              <FaCamera className="text-white text-3xl drop-shadow-lg" />
             </label>
             <input
               id="avatar-upload"
@@ -175,9 +174,9 @@ function ProFile() {
               disabled={avatarLoading}
             />
             {avatarLoading && (
-              <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-60 rounded-full">
+              <div className="absolute inset-0 flex items-center justify-center bg-black/70 rounded-full">
                 <svg
-                  className="animate-spin h-6 w-6 text-white"
+                  className="animate-spin h-8 w-8 text-white"
                   xmlns="http://www.w3.org/2000/svg"
                   fill="none"
                   viewBox="0 0 24 24"
@@ -199,16 +198,16 @@ function ProFile() {
               </div>
             )}
           </div>
-          <h2 className="text-2xl font-bold text-center">
+          <h2 className="text-2xl md:text-3xl font-extrabold text-center drop-shadow-lg tracking-wide">
             {firstName} {lastName || "Chưa có tên"}
           </h2>
         </div>
 
         {/* Right Section: View or Edit */}
-        <div className="w-full md:w-2/3 p-8 md:p-12">
+        <div className="w-full md:w-2/3 p-8 md:p-14 bg-white/70 backdrop-blur-lg font-roboto">
           {isEditing ? (
             <>
-              <h2 className="text-3xl font-bold text-gray-800 mb-2">
+              <h2 className="text-3xl font-extrabold text-indigo-700 mb-2 tracking-tight">
                 Chỉnh sửa hồ sơ
               </h2>
               <p className="text-sm text-gray-500 mb-6">
@@ -216,20 +215,46 @@ function ProFile() {
               </p>
 
               {error && (
-                <div className="mb-6 p-4 bg-red-50 border-l-4 border-red-500 text-red-700 rounded-lg animate-fade-in">
+                <div className="mb-6 p-4 bg-red-100 border-l-4 border-red-500 text-red-700 rounded-lg flex items-center gap-2 animate-fade-in">
+                  <svg
+                    className="w-5 h-5 text-red-500"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M6 18L18 6M6 6l12 12"
+                    />
+                  </svg>
                   {error}
                 </div>
               )}
               {success && (
-                <div className="mb-6 p-4 bg-green-50 border-l-4 border-green-500 text-green-700 rounded-lg animate-fade-in">
+                <div className="mb-6 p-4 bg-green-100 border-l-4 border-green-500 text-green-700 rounded-lg flex items-center gap-2 animate-fade-in">
+                  <svg
+                    className="w-5 h-5 text-green-500"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M5 13l4 4L19 7"
+                    />
+                  </svg>
                   {success}
                 </div>
               )}
 
-              <form onSubmit={handleUpdateProfile} className="space-y-5">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <form onSubmit={handleUpdateProfile} className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                   <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    <label className="block text-sm font-semibold text-indigo-700 mb-2">
                       Họ
                     </label>
                     <input
@@ -237,13 +262,13 @@ function ProFile() {
                       placeholder="Nhập họ"
                       value={firstName}
                       onChange={(e) => setFirstName(e.target.value)}
-                      className="w-full p-4 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-400 focus:border-transparent transition-all duration-200 hover:bg-gray-100"
+                      className="w-full p-4 bg-white/80 border border-indigo-200 rounded-xl text-base focus:ring-2 focus:ring-indigo-400 focus:border-transparent transition-all duration-200 hover:bg-indigo-50 shadow-sm"
                       disabled={loading}
                       required
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    <label className="block text-sm font-semibold text-indigo-700 mb-2">
                       Tên
                     </label>
                     <input
@@ -251,14 +276,14 @@ function ProFile() {
                       placeholder="Nhập tên"
                       value={lastName}
                       onChange={(e) => setLastName(e.target.value)}
-                      className="w-full p-4 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-400 focus:border-transparent transition-all duration-200 hover:bg-gray-100"
+                      className="w-full p-4 bg-white/80 border border-indigo-200 rounded-xl text-base focus:ring-2 focus:ring-indigo-400 focus:border-transparent transition-all duration-200 hover:bg-indigo-50 shadow-sm"
                       disabled={loading}
                       required
                     />
                   </div>
                 </div>
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  <label className="block text-sm font-semibold text-indigo-700 mb-2">
                     Địa chỉ Email
                   </label>
                   <input
@@ -266,13 +291,13 @@ function ProFile() {
                     placeholder="Nhập email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="w-full p-4 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-400 focus:border-transparent transition-all duration-200 hover:bg-gray-100"
+                    className="w-full p-4 bg-white/80 border border-indigo-200 rounded-xl text-base focus:ring-2 focus:ring-indigo-400 focus:border-transparent transition-all duration-200 hover:bg-indigo-50 shadow-sm"
                     disabled={loading}
                     required
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  <label className="block text-sm font-semibold text-indigo-700 mb-2">
                     Số điện thoại
                   </label>
                   <input
@@ -280,16 +305,16 @@ function ProFile() {
                     placeholder="Nhập số điện thoại"
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
-                    className="w-full p-4 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-400 focus:border-transparent transition-all duration-200 hover:bg-gray-100"
+                    className="w-full p-4 bg-white/80 border border-indigo-200 rounded-xl text-base focus:ring-2 focus:ring-indigo-400 focus:border-transparent transition-all duration-200 hover:bg-indigo-50 shadow-sm"
                     disabled={loading}
                     required
                   />
                 </div>
-                <div className="flex space-x-4">
+                <div className="flex space-x-4 mt-4">
                   <button
                     type="submit"
                     disabled={loading}
-                    className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white py-4 rounded-lg font-semibold text-sm shadow-lg hover:shadow-xl transition-all duration-300 hover:from-indigo-700 hover:to-purple-700 disabled:opacity-50"
+                    className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white py-4 rounded-xl font-bold text-base shadow-lg hover:shadow-2xl transition-all duration-300 hover:from-indigo-700 hover:to-purple-700 disabled:opacity-50 flex items-center justify-center gap-2"
                   >
                     {loading ? (
                       <span className="flex items-center justify-center">
@@ -316,16 +341,42 @@ function ProFile() {
                         Đang cập nhật...
                       </span>
                     ) : (
-                      "Cập nhật hồ sơ"
+                      <>
+                        <svg
+                          className="w-5 h-5"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            d="M5 13l4 4L19 7"
+                          />
+                        </svg>
+                        Cập nhật hồ sơ
+                      </>
                     )}
                   </button>
                   <button
                     type="button"
                     onClick={() => setIsEditing(false)}
-                    className="w-full bg-gray-600 text-black 
-                    py-4 rounded-lg font-semibold text-sm shadow-lg 
-                    hover:shadow-xl transition-all duration-300 hover:bg-gray-700"
+                    className="w-full bg-gray-200 text-gray-700 py-4 rounded-xl font-bold text-base shadow-lg hover:shadow-2xl transition-all duration-300 hover:bg-gray-300 flex items-center justify-center gap-2"
                   >
+                    <svg
+                      className="w-5 h-5"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M6 18L18 6M6 6l12 12"
+                      />
+                    </svg>
                     Hủy
                   </button>
                 </div>
@@ -333,33 +384,35 @@ function ProFile() {
             </>
           ) : (
             <>
-              <h2 className="text-3xl font-bold text-gray-800 mb-2">
+              <h2 className="text-3xl font-extrabold text-indigo-700 mb-2 tracking-tight">
                 Hồ sơ cá nhân
               </h2>
               <p className="text-sm text-gray-500 mb-6">
                 Thông tin cá nhân của bạn
               </p>
 
-              <div className="space-y-4">
+              <div className="space-y-6">
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-1">
+                  <label className="block text-sm font-semibold text-indigo-700 mb-1">
                     Họ và Tên
                   </label>
-                  <p className="text-gray-900">
+                  <p className="text-gray-900 text-lg font-semibold">
                     {firstName} {lastName || "Chưa có tên"}
                   </p>
                 </div>
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-1">
+                  <label className="block text-sm font-semibold text-indigo-700 mb-1">
                     Địa chỉ Email
                   </label>
-                  <p className="text-gray-900">{email || "Chưa có email"}</p>
+                  <p className="text-gray-900 text-lg font-semibold">
+                    {email || "Chưa có email"}
+                  </p>
                 </div>
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-1">
+                  <label className="block text-sm font-semibold text-indigo-700 mb-1">
                     Số điện thoại
                   </label>
-                  <p className="text-gray-900">
+                  <p className="text-gray-900 text-lg font-semibold">
                     {phone || "Chưa có số điện thoại"}
                   </p>
                 </div>
@@ -367,14 +420,27 @@ function ProFile() {
 
               <button
                 onClick={() => setIsEditing(true)}
-                className="w-full mt-6 bg-gradient-to-r from-indigo-600 to-purple-600 text-white py-4 rounded-lg font-semibold text-sm shadow-lg hover:shadow-xl transition-all duration-300 hover:from-indigo-700 hover:to-purple-700"
+                className="w-full mt-8 bg-gradient-to-r from-indigo-600 to-purple-600 text-white py-4 rounded-xl font-bold text-base shadow-lg hover:shadow-2xl transition-all duration-300 hover:from-indigo-700 hover:to-purple-700 flex items-center justify-center gap-2"
               >
+                <svg
+                  className="w-5 h-5"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M15.232 5.232l3.536 3.536M9 11l6 6M3 21h6v-6l9.293-9.293a1 1 0 00-1.414-1.414L9 9.586V3H3v6h6z"
+                  />
+                </svg>
                 Chỉnh sửa hồ sơ
               </button>
             </>
           )}
 
-          <p className="mt-6 text-sm text-center text-gray-600">
+          <p className="mt-8 text-sm text-center text-gray-600">
             Quay lại{" "}
             <Link
               to="/"

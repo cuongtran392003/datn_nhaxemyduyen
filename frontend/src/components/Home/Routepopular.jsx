@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import routeService from "../../service/routeService";
 import tripService from "../../service/tripService";
 import Iconlc1 from "../../assets/icons/iconlc1.png";
@@ -13,8 +13,7 @@ function Routepopular() {
   const [error, setError] = useState(null);
   const routesRef = useRef([]);
   const tripsRef = useRef([]);
-
-  const currentDate = new Date().toISOString().split("T")[0];
+  const isFirstFetch = useRef(true);
 
   // Hàm chuyển đổi duration thành định dạng giờ:phút
   const formatDuration = (duration) => {
@@ -40,19 +39,33 @@ function Routepopular() {
     return duration; // Giữ nguyên nếu không xác định được định dạng
   };
 
-  const fetchRoutes = async () => {
+  const fetchRoutes = useCallback(async () => {
     try {
-      setLoading(true);
+      if (isFirstFetch.current) setLoading(true);
 
       const routeData = await routeService.getRoutes();
       const tripData = await tripService.getTrips();
 
+      // Lấy ngày local yyyy-MM-dd (không dùng UTC)
+      const now = new Date();
+      const localDate =
+        now.getFullYear() +
+        "-" +
+        String(now.getMonth() + 1).padStart(2, "0") +
+        "-" +
+        String(now.getDate()).padStart(2, "0");
+
       const filteredTrips = tripData.filter((trip) => {
         if (!trip.departure_time) return false;
-        const departureDate = new Date(trip.departure_time)
-          .toISOString()
-          .split("T")[0];
-        return departureDate === currentDate;
+        // So sánh ngày local yyyy-MM-dd
+        const dep = new Date(trip.departure_time);
+        const tripDate =
+          dep.getFullYear() +
+          "-" +
+          String(dep.getMonth() + 1).padStart(2, "0") +
+          "-" +
+          String(dep.getDate()).padStart(2, "0");
+        return tripDate === localDate;
       });
 
       const formattedRoutes = routeData
@@ -64,7 +77,7 @@ function Routepopular() {
           distance: route.distance || 0,
           duration: route.duration || "N/A",
           bus_image: route.bus_image || "https://via.placeholder.com/286x185",
-          date: currentDate,
+          date: localDate,
         }))
         .slice(0, 4);
 
@@ -84,16 +97,19 @@ function Routepopular() {
     } catch (err) {
       setError("Đã xảy ra lỗi khi tải dữ liệu: " + err.message);
     } finally {
-      setLoading(false);
+      if (isFirstFetch.current) {
+        setLoading(false);
+        isFirstFetch.current = false;
+      }
     }
-  };
+  }, []); // Không phụ thuộc currentDate, luôn lấy ngày local mới nhất
 
   useEffect(() => {
     fetchRoutes();
-    const interval = setInterval(fetchRoutes, 30000);
+    const interval = setInterval(fetchRoutes, 3000);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [fetchRoutes]);
 
   const handleBookTicket = (route) => {
     try {
@@ -103,13 +119,21 @@ function Routepopular() {
           trip.from_location === route.from && trip.to_location === route.to
       );
 
-      // Luôn điều hướng đến /search, kể cả khi không có chuyến xe nào
+      // Luôn lấy ngày thực tế tại thời điểm bấm nút (theo local timezone, không dùng UTC)
+      const today = new Date();
+      const todayStr =
+        today.getFullYear() +
+        "-" +
+        String(today.getMonth() + 1).padStart(2, "0") +
+        "-" +
+        String(today.getDate()).padStart(2, "0");
+
       navigate("/search", {
         state: {
           trips: matchedTrips, // Có thể là mảng rỗng nếu không tìm thấy chuyến
           departure: route.from,
           destination: route.to,
-          date: currentDate,
+          date: todayStr, // Đảm bảo luôn truyền ngày hiện tại (local)
         },
       });
     } catch (err) {
@@ -128,88 +152,86 @@ function Routepopular() {
   }
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 m-5">
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-7 m-5 font-roboto">
       {routes.map((route) => (
         <div
           key={route.id}
-          className="rounded-xl shadow-lg shadow-yellow bg-white md:w-[286px] md:h-[398px]"
+          className="rounded-3xl shadow-xl bg-white md:w-[286px] md:h-[420px] border border-gray-100 hover:shadow-2xl hover:scale-105 transition-all duration-300 group relative overflow-hidden"
         >
-          <img
-            src={route.bus_image}
-            alt="Bus"
-            className="w-full h-40 object-cover rounded-t-xl md:h-[185px]"
-          />
-          <div className="flex justify-between items-center p-5">
-            <div className="flex flex-col gap-y-2 md:gap-y-5">
-              <div className="flex flex-row gap-x-2 items-center">
-                <img className="w-4 h-4" src={Iconlc1} alt="Điểm đi" />
-                <p>{route.from}</p>
-              </div>
-              <div className="flex flex-row gap-x-2 items-center">
-                <img className="w-4 h-4" src={Iconlc2} alt="Điểm đến" />
-                <p>{route.to}</p>
-              </div>
+          <div className="relative">
+            <img
+              src={route.bus_image}
+              alt="Bus"
+              className="w-full h-44 object-cover rounded-t-3xl md:h-[185px] group-hover:brightness-95 group-hover:scale-105 transition-all duration-300"
+            />
+            <div className="absolute top-3 left-3 bg-gradient-to-r from-purple-500 to-blue-500 text-white text-xs px-3 py-1 rounded-full shadow font-semibold uppercase tracking-wide">
+              Tuyến nổi bật
             </div>
-            <p className="">Từ {route.price}</p>
           </div>
-          <hr className="border-dashed border-yellow" />
-          <ul className="flex justify-between items-center p-5">
-            <li className="flex flex-row gap-x-2 items-center">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24"
-                strokeWidth="1.5"
-                stroke="currentColor"
-                className="size-4 text-gray-600"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"
-                />
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z"
-                />
-              </svg>
-              <p className="text-gray-600">{Math.round(route.distance)}km</p>
-            </li>
-            <li className="flex flex-row justify-around items-center">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24"
-                strokeWidth="1.5"
-                stroke="currentColor"
-                className="size-4 text-gray-600"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"
-                />
-              </svg>
-              <p className="text-gray-600">{formatDuration(route.duration)}</p>
-            </li>
-            <button
-              onClick={() => handleBookTicket(route)}
-              className="relative inline-flex items-center justify-center p-0.5 mb-2 me-2
-              overflow-hidden text-sm font-medium text-gray-900 rounded-full
-              group bg-gradient-to-br from-purple-600 to-blue-500
-              group-hover:from-purple-600 group-hover:to-blue-500 hover:text-white
-              dark:text-black 
-              focus:ring-4 focus:outline-none focus:ring-blue-300 dark:focus:ring-blue-800"
-            >
-              <span
-                className="relative px-5 py-2.5 transition-all ease-in duration-75 bg-white dark:bg-gray-900
-                rounded-full group-hover:bg-transparent group-hover:dark:bg-transparent"
+          <div className="flex flex-col gap-2 p-5">
+            <div className="flex flex-row gap-x-3 items-center mb-2">
+              <img className="w-5 h-5" src={Iconlc1} alt="Điểm đi" />
+              <span className="text-base font-bold text-indigo-700">
+                {route.from}
+              </span>
+              <span className="mx-2 text-gray-400">→</span>
+              <img className="w-5 h-5" src={Iconlc2} alt="Điểm đến" />
+              <span className="text-base font-bold text-pink-600">
+                {route.to}
+              </span>
+            </div>
+            <div className="flex justify-between items-center mb-2">
+              <span className="text-gray-500 text-sm flex items-center gap-1">
+                <svg
+                  className="w-4 h-4 text-yellow-500"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"
+                  />
+                </svg>
+                {formatDuration(route.duration)}
+              </span>
+              <span className="text-gray-500 text-sm flex items-center gap-1">
+                <svg
+                  className="w-4 h-4 text-green-500"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"
+                  />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z"
+                  />
+                </svg>
+                {Math.round(route.distance)}km
+              </span>
+            </div>
+            <div className="flex justify-between items-center mb-2">
+              <span className="text-gray-700 font-semibold text-lg">
+                Từ{" "}
+                <span className="text-pink-600 font-bold">{route.price}</span>
+              </span>
+              <button
+                onClick={() => handleBookTicket(route)}
+                className="bg-gradient-to-r from-indigo-500 to-purple-500 text-white font-bold px-5 py-2 rounded-full shadow hover:from-indigo-600 hover:to-purple-600 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-300"
               >
                 Đặt vé
-              </span>
-            </button>
-          </ul>
+              </button>
+            </div>
+          </div>
         </div>
       ))}
     </div>

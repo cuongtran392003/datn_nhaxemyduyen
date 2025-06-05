@@ -18,7 +18,6 @@ import SearchResults from "./components/pages/SearchResults";
 import SignUp from "./components/Account/SignUp";
 import SignIn from "./components/Account/SignIn";
 import { AuthProvider } from "./components/contexts/AuthContext";
-import PrivateRoute from "./components/PrivateRoute";
 import ForgotPassword from "./components/Account/ForgotPassword";
 import ResetPassword from "./components/Account/ResetPassword";
 import ScrollToTop from "./components/ScrollToTop";
@@ -27,16 +26,18 @@ import CSKH from "./components/Shared/CSKH";
 import NewsDetail from "./components/News/NewsDetail";
 import ProFile from "./components/Account/ProFile";
 import TicketHistory from "./components/Account/TicketHistory";
-import { ToastContainer } from "react-toastify";
-import "react-toastify/dist/ReactToastify.css";
+import TicketDetail from "./components/pages/TicketDetail";
 
+import MetaTags from "./components/Shared/MetaTags";
 
 
 
 function Layout() {
   const location = useLocation();
+
   return (
     <>
+      
       {location.pathname !== "/signup" && location.pathname !== "/signin" && (
         <Header />
       )}
@@ -70,6 +71,7 @@ function Layout() {
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/profile" element={<ProFile/>} />
           <Route path="/booking-history" element={<TicketHistory/>} />
+          <Route path="/ticketdetail/:ticket_id" element={<TicketDetail/>}/>
         </Routes>
       </main>
       {location.pathname !== "/signup" && location.pathname !== "/signin" && (

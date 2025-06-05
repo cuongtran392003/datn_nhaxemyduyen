@@ -39,15 +39,25 @@ function SignIn() {
       setTimeout(() => navigate("/"), 2000); // Chuyển hướng sau 2 giây
     } catch (err) {
       console.error("Lỗi đăng nhập:", err);
-      setError(
-        err.message.includes("Không nhận được token")
-          ? "Lỗi server: Không thể xác thực. Vui lòng thử lại sau."
-          : err.message.includes("kiểm tra email")
-          ? "Email hoặc mật khẩu không đúng."
-          : err.message.includes("Bạn không có quyền")
-          ? "Không thể tải thông tin người dùng. Vui lòng thử lại."
-          : err.message
-      );
+      // Xử lý thông báo lỗi thân thiện
+      if (
+        err.message.includes("incorrect") ||
+        err.message.includes("invalid") ||
+        err.message.includes("sai mật khẩu") ||
+        err.message.includes("The password you entered")
+      ) {
+        setError(
+          "Email hoặc mật khẩu không đúng. Nếu quên mật khẩu, hãy nhấn vào Quên mật khẩu."
+        );
+      } else if (err.message.includes("Không nhận được token")) {
+        setError("Lỗi server: Không thể xác thực. Vui lòng thử lại sau.");
+      } else if (err.message.includes("kiểm tra email")) {
+        setError("Email hoặc mật khẩu không đúng.");
+      } else if (err.message.includes("Bạn không có quyền")) {
+        setError("Không thể tải thông tin người dùng. Vui lòng thử lại.");
+      } else {
+        setError(err.message);
+      }
     } finally {
       setLoading(false);
     }

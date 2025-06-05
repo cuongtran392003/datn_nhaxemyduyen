@@ -141,7 +141,8 @@ function custom_get_user(WP_REST_Request $request) {
 
     $user = get_user_by('id', $user_id);
     if (!$user) {
-        return new WP_Error('invalid_user', 'Người dùng không tồn tại.', array('status' => 404));
+        return new WP_Error('invalid_user', 'Không tìm thấy tài khoản người dùng này.', 
+        array('status' => 404));
     }
 
     $user_data = array(
@@ -173,7 +174,8 @@ function custom_register_user(WP_REST_Request $request) {
     $phone = sanitize_text_field($params['description'] ?? '');
 
     if (empty($username) || empty($email) || empty($password)) {
-        return new WP_Error('missing_fields', 'Vui lòng điền đầy đủ thông tin.', array('status' => 400));
+        return new WP_Error('missing_fields', 'Vui lòng điền đầy đủ thông tin.', 
+        array('status' => 400));
     }
 
     if (email_exists($email) || username_exists($username)) {
@@ -255,25 +257,29 @@ function custom_lost_password(WP_REST_Request $request) {
         return new WP_Error('invalid_email', 'Email không tồn tại.', array('status' => 400));
     }
 
-    // Tạo khóa đặt lại
+    // Tạo khóa đặt lại (chỉ gọi 1 lần)
     $reset_key = get_password_reset_key($user_data);
+    error_log('DEBUG RESET: $reset_key tạo ra (gốc): ' . $reset_key);
+    // Lấy user_activation_key thực tế trong DB
+    global $wpdb;
+    $user_row = $wpdb->get_row($wpdb->prepare("SELECT ID, user_email, user_activation_key FROM {$wpdb->users} WHERE user_email = %s", $user_login));
+    if ($user_row) {
+        error_log('DEBUG RESET: user_activation_key trong DB SAU get_password_reset_key: ' . $user_row->user_activation_key);
+        error_log('DEBUG RESET: So sánh key (reset_key == user_activation_key): ' . ($reset_key === $user_row->user_activation_key ? 'TRUE' : 'FALSE'));
+    }
+    // Gửi đúng key trong DB qua email (bỏ qua get_password_reset_key trả về)
+    $reset_key_to_send = $user_row ? $user_row->user_activation_key : $reset_key;
+    $reset_key_encoded = rawurlencode($reset_key_to_send);
+    error_log('DEBUG RESET: $reset_key_to_send (dùng để gửi email): ' . $reset_key_to_send);
+    $reset_link = 'http://localhost:3000/reset-password?key=' . $reset_key_encoded . '&email=' . urlencode($user_login);
+    error_log('DEBUG RESET: $reset_link gửi qua email: ' . $reset_link);
 
     if (is_wp_error($reset_key)) {
         error_log('Không thể tạo khóa đặt lại: ' . $reset_key->get_error_message());
         return new WP_Error('reset_failed', 'Không thể tạo liên kết đặt lại mật khẩu.', array('status' => 500));
     }
 
-    // Thiết lập thời gian hết hạn cho khóa đặt lại
-    update_user_meta($user_data->ID, 'password_reset_expiry', time() + 3600);
-
-    // Tạo liên kết đặt lại
-    $reset_link = add_query_arg(
-        array(
-            'key' => $reset_key,
-            'email' => urlencode($user_login),
-        ),
-        'http://localhost:3000/reset-password'
-    );
+    // BỎ QUA custom meta password_reset_expiry, để core WP tự kiểm soát thời gian sống của key
 
     // Nội dung email HTML
     $subject = 'Yêu Cầu Đặt Lại Mật Khẩu - Nhà Xe Mỹ Duyên';
@@ -284,7 +290,7 @@ function custom_lost_password(WP_REST_Request $request) {
     $message .= '<p><a href="' . esc_url($reset_link) . '" style="display: inline-block; padding: 10px 20px; background-color: #1a73e8; color: #fff; text-decoration: none; border-radius: 5px;">Đặt Lại Mật Khẩu</a></p>';
     $message .= '<p>Nếu nút không hoạt động, hãy sao chép và dán liên kết sau vào trình duyệt của bạn:</p>';
     $message .= '<p><a href="' . esc_url($reset_link) . '">' . esc_url($reset_link) . '</a></p>';
-    $message .= '<p>Liên kết này sẽ hết hạn sau 1 giờ. Nếu bạn không yêu cầu đặt lại mật khẩu, vui lòng bỏ qua email này.</p>';
+    $message .= '<p>Liên kết này sẽ hết hạn sau <b>24 giờ</b>. Nếu bạn không yêu cầu đặt lại mật khẩu, vui lòng bỏ qua email này.</p>';
     $message .= '<p>Trân trọng,<br>Nhà Xe Mỹ Duyên</p>';
     $message .= '</body></html>';
 
@@ -322,29 +328,43 @@ function custom_reset_password(WP_REST_Request $request) {
     $new_password = $params['new_password'] ?? '';
 
     error_log('Yêu cầu đặt lại mật khẩu: ' . print_r($params, true));
+    error_log('DEBUG RESET: user_login nhận được: ' . $user_login . ', reset_key nhận được: ' . $reset_key);
 
+    // Lấy user từ DB để log key thực tế
+    global $wpdb;
+    $user_row = $wpdb->get_row($wpdb->prepare("SELECT ID, user_email, user_activation_key FROM {$wpdb->users} WHERE user_email = %s", $user_login));
+    if ($user_row) {
+        error_log('DEBUG RESET: user_activation_key trong DB: ' . $user_row->user_activation_key);
+        error_log('DEBUG RESET: So sánh key (reset_key == user_activation_key): ' . ($reset_key === $user_row->user_activation_key ? 'TRUE' : 'FALSE'));
+    } else {
+        error_log('DEBUG RESET: Không tìm thấy user trong DB với email: ' . $user_login);
+    }
+
+    // BỎ QUA kiểm tra custom meta password_reset_expiry, chỉ kiểm tra các trường bắt buộc
     if (empty($user_login) || empty($reset_key) || empty($new_password)) {
         error_log('Thiếu trường: user_login=' . $user_login . ', reset_key=' . $reset_key . ', new_password=' . $new_password);
         return new WP_Error('missing_fields', 'Vui lòng điền đầy đủ thông tin.', array('status' => 400));
     }
 
+    error_log('DEBUG RESET: Gọi check_password_reset_key với reset_key: ' . $reset_key . ', user_login: ' . $user_login);
     $user = check_password_reset_key($reset_key, $user_login);
 
     if (is_wp_error($user)) {
-        error_log('Khóa đặt lại không hợp lệ cho user_login: ' . $user_login . ', reset_key: ' . $reset_key);
-        error_log('Chi tiết lỗi: ' . $user->get_error_message());
-        return new WP_Error('invalid_key', 'Liên kết đặt lại không hợp lệ hoặc đã hết hạn.', array('status' => 400));
+        error_log('DEBUG RESET: check_password_reset_key trả về lỗi: ' . $user->get_error_message());
+        $msg = $user->get_error_message();
+        if (strpos($msg, 'expired') !== false || strpos($msg, 'hết hạn') !== false) {
+            return new WP_Error('invalid_key', 'Liên kết đặt lại đã hết hạn. Vui lòng gửi lại yêu cầu quên mật khẩu.', array('status' => 400));
+        } elseif (strpos($msg, 'invalid') !== false || strpos($msg, 'không hợp lệ') !== false || $msg === 'Invalid key.') {
+            return new WP_Error('invalid_key', 'Liên kết đặt lại không hợp lệ hoặc đã được sử dụng. Vui lòng gửi lại yêu cầu quên mật khẩu.', array('status' => 400));
+        } elseif (strpos($msg, 'user') !== false) {
+            return new WP_Error('invalid_user', 'Tài khoản không tồn tại hoặc đã bị xóa.', array('status' => 400));
+        } else {
+            return new WP_Error('invalid_key', $msg, array('status' => 400));
+        }
     }
 
-    $expiry = get_user_meta($user->ID, 'password_reset_expiry', true);
-    error_log('Thời gian hết hạn: ' . $expiry . ', Thời gian hiện tại: ' . time());
-    if (!$expiry || time() > $expiry) {
-        error_log('Khóa đặt lại đã hết hạn cho user_id: ' . $user->ID);
-        return new WP_Error('expired_key', 'Liên kết đặt lại đã hết hạn.', array('status' => 400));
-    }
-
+    // Đặt lại mật khẩu
     wp_set_password($new_password, $user->ID);
-    delete_user_meta($user->ID, 'password_reset_expiry');
 
     return new WP_REST_Response(array(
         'message' => 'Mật khẩu đã được đặt lại thành công. Vui lòng đăng nhập.',

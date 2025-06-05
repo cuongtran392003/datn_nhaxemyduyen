@@ -1835,53 +1835,66 @@ function nhaxemyduyen_manage_trips() {
                 }
             });
 
-            
-            // Toggle form thêm/sửa
+              // Toggle form thêm/sửa chuyến xe
             $(document).on('click', '.nhaxe-toggle-form', function() {
                 var action = $(this).data('action');
-                var vehicleId = $(this).data('vehicle-id');
+                var tripId = $(this).data('trip-id');
 
                 if (action === 'add') {
-                    $('#vehicle_action').val('add');
-                    $('#vehicle_id').val('');
-                    $('#license_plate').val('');
-                    $('#type').val('');
-                    $('#capacity').val('');
-                    $('#image').val('');
+                    // Reset form về trạng thái thêm mới
+                    $('#trip_action').val('add');
+                    $('#trip_id').val('');
+                    $('#trip-form')[0].reset();
+                    $('#price').val('');
+                    $('#arrival_time').val('');
                     $('.nhaxe-image-preview').html('');
-                    $('#submit-vehicle').text('Thêm Xe');
+                    $('#submit-trip').text('Thêm Chuyến Xe');
                     $('.nhaxe-add-form').removeClass('hidden');
-                } else if (action === 'edit' && vehicleId) {
+                } else if (action === 'edit' && tripId) {
+                    // Lấy dữ liệu chuyến xe và nạp vào form
                     $.ajax({
                         url: ajaxurl,
                         type: 'POST',
                         data: {
-                            action: 'nhaxemyduyen_get_vehicle',
-                            vehicle_id: vehicleId,
-                            nonce: '<?php echo wp_create_nonce('nhaxemyduyen_get_vehicle'); ?>'
+                            action: 'nhaxemyduyen_get_trip',
+                            trip_id: tripId,
+                            nonce: '<?php echo wp_create_nonce('nhaxemyduyen_edit_trip'); ?>'
                         },
                         success: function(response) {
                             if (response.success) {
-                                var vehicle = response.data;
-                                $('#vehicle_action').val('edit');
-                                $('#vehicle_id').val(vehicle.vehicle_id);
-                                $('#license_plate').val(vehicle.license_plate);
-                                $('#type').val(vehicle.type);
-                                $('#capacity').val(vehicle.capacity);
-                                $('#image').val(vehicle.image);
-                                $('.nhaxe-image-preview').html(vehicle.image ? '<img src="' + vehicle.image + '" alt="Hình ảnh xe" class="max-w-[200px] rounded-lg">' : '');
-                                $('#submit-vehicle').text('Cập nhật Xe');
+                                var trip = response.data;
+                                $('#trip_action').val('edit');
+                                $('#trip_id').val(trip.trip_id);
+                                $('#route_id').val(trip.route_id).trigger('change');
+                                $('#driver_id').val(trip.driver_id);
+                                $('#vehicle_id').val(trip.vehicle_id).trigger('change');
+                                $('#pickup_location').val(trip.pickup_location);
+                                $('#dropoff_location').val(trip.dropoff_location);
+                                $('#departure_time').val(trip.departure_time.replace(' ', 'T'));
+                                $('#arrival_time').val(trip.arrival_time ? trip.arrival_time.replace(' ', 'T') : '');
+                                $('#price').val(trip.price);
+                                $('#available_seats').val(trip.available_seats);
+                                // Hiển thị hình ảnh xe nếu có
+                                var selectedVehicle = $('#vehicle_id').find('option:selected');
+                                var imageUrl = selectedVehicle.data('image') || '';
+                                if (imageUrl) {
+                                    $('.nhaxe-image-preview').html('<img src="' + imageUrl + '" alt="Hình ảnh xe" class="max-w-[200px] rounded-lg">');
+                                } else {
+                                    $('.nhaxe-image-preview').html('');
+                                }
+                                $('#submit-trip').text('Cập nhật Chuyến Xe');
                                 $('.nhaxe-add-form').removeClass('hidden');
                             } else {
-                                $('#nhaxe-message').html('<div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6 rounded-lg animate-slide-in"><p>' + response.data.message + '</p></div>');
+                                $('#nhaxe-message').html('<div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6 rounded-lg animate-slide-in"><p>Lỗi: Không lấy được dữ liệu chuyến xe.</p></div>');
                             }
                         },
                         error: function(xhr) {
-                            console.error('Lỗi AJAX (get_vehicle):', xhr);
+                            console.error('Lỗi AJAX (get_trip):', xhr);
                             $('#nhaxe-message').html('<div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6 rounded-lg animate-slide-in"><p>Đã có lỗi xảy ra: ' + xhr.statusText + '</p></div>');
                         }
                     });
                 } else {
+                    // Ẩn form khi bấm Hủy hoặc không hợp lệ
                     $('.nhaxe-add-form').addClass('hidden');
                 }
             });
@@ -6164,68 +6177,12 @@ function nhaxemyduyen_admin_styles($hook) {
     <?php
 }
 
-function create_contact_post_type() {
-    register_post_type('contact_message', array(
-        'labels' => array(
-            'name' => __('Contact Messages'),
-            'singular_name' => __('Contact Message')
-        ),
-        'public' => false,
-        'show_ui' => true,
-        'supports' => array('title', 'editor'),
-        'show_in_rest' => true,
-    ));
-}
-add_action('init', 'create_contact_post_type');
 
-// Tạo endpoint REST API tùy chỉnh
-add_action('rest_api_init', function () {
-    register_rest_route('custom/v1', '/contact', array(
-        'methods' => 'POST',
-        'callback' => 'handle_contact_submission',
-        'permission_callback' => '__return_true', // Cho phép tất cả người dùng gửi
-    ));
-});
-
-// Xử lý gửi tin nhắn và lưu vào custom post type
-function handle_contact_submission($request) {
-    $params = $request->get_json_params();
-    $name = sanitize_text_field($params['name']);
-    $phone = sanitize_text_field($params['phone']);
-    $email = sanitize_email($params['email']);
-    $message = sanitize_textarea_field($params['message']);
-
-    if (empty($name) || empty($phone) || empty($email) || empty($message)) {
-        return new WP_Error('missing_data', 'Vui lòng điền đầy đủ thông tin.', array('status' => 400));
-    }
-
-    // Tạo bài viết mới trong custom post type
-    $post_data = array(
-        'post_title' => 'Tin nhắn từ ' . $name,
-        'post_content' => "Họ tên: $name\nSố điện thoại: $phone\nEmail: $email\nNội dung: $message",
-        'post_status' => 'publish',
-        'post_type' => 'contact_message',
-    );
-
-    $post_id = wp_insert_post($post_data);
-
-    if ($post_id && !is_wp_error($post_id)) {
-        // Gửi email thông báo cho admin (tùy chọn)
-        $to = get_option('admin_email');
-        $subject = 'Tin nhắn mới từ ' . $name;
-        $body = "Họ tên: $name\nSố điện thoại: $phone\nEmail: $email\nNội dung: $message";
-        wp_mail($to, $subject, $body);
-
-        return new WP_Rest_Response('Tin nhắn đã được gửi thành công!', 200);
-    } else {
-        return new WP_Error('save_error', 'Đã xảy ra lỗi khi lưu tin nhắn.', array('status' => 500));
-    }
-}
 
     require_once plugin_dir_path(__FILE__) . 'inc/custom-api.php';
     require_once plugin_dir_path(__FILE__) . 'inc/location-api.php';
     require_once plugin_dir_path(__FILE__) . 'inc/route-api.php';
     require_once plugin_dir_path(__FILE__) . 'inc/trip-api.php';
     require_once plugin_dir_path(__FILE__) . 'inc/ticket-api.php';
-    
+    require_once plugin_dir_path(__FILE__) . 'inc/contact-api.php';
 ?>

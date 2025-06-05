@@ -4,15 +4,17 @@ function StepCard({ icon, title, description, gradient }) {
     <div
       className={`
         bg-gradient-to-tr ${gradient}
-        rounded-xl shadow-xl shadow-gray-500 p-5
+        rounded-2xl shadow-xl p-6
         text-white flex flex-col items-center gap-y-3
-        md:flex-row md:gap-x-2 md:w-[283px] md:h-[166px]
+        md:flex-row md:gap-x-4 md:w-[283px] md:h-[166px]
+        font-roboto border border-white/20
+        hover:shadow-2xl hover:scale-105 transition-all duration-300
       `}
     >
-      <img className="w-10 h-10 md:w-[60px] md:h-[60px]" src={icon} alt={`${title} icon`} />
+      <img className="w-12 h-12 md:w-[60px] md:h-[60px] drop-shadow-lg" src={icon} alt={`${title} icon`} />
       <div>
-        <p className="font-semibold md:text-[20px] md:mb-2">{title}</p>
-        <p className="text-textmobile md:text-[14px]">{description}</p>
+        <p className="font-bold md:text-[20px] md:mb-2 text-white drop-shadow-sm">{title}</p>
+        <p className="text-white/90 md:text-[14px]">{description}</p>
       </div>
     </div>
   );

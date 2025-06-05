@@ -47,6 +47,11 @@ function PaymentStatus() {
       });
   }, [location, navigate, token, authLoading]);
 
+  // Hàm xử lý tìm chuyến xe khác: reset bộ lọc và chuyển về trang tìm kiếm
+  const handleFindAnotherTrip = () => {
+    navigate("/search", { state: { reset: true } });
+  };
+
   if (loading || authLoading) {
     return (
       <div className="flex justify-center items-center h-screen">
@@ -91,13 +96,13 @@ function PaymentStatus() {
     : "0";
 
   return (
-    <div className="max-w-3xl mx-auto p-6">
+    <div className="max-w-3xl mx-auto p-6 font-roboto">
       {isSuccess ? (
-        <div className="bg-green-50 p-6 rounded-lg">
-          <h2 className="text-2xl font-bold text-green-600 mb-4 flex items-center gap-2">
+        <div className="bg-gradient-to-br from-green-50 via-white to-blue-50 p-10 rounded-3xl shadow-2xl border-2 border-green-200">
+          <h2 className="text-3xl font-extrabold text-green-700 mb-6 flex items-center gap-3 justify-center font-montserrat">
             <svg
               xmlns="http://www.w3.org/2000/svg"
-              className="h-6 w-6"
+              className="h-10 w-10"
               viewBox="0 0 20 20"
               fill="currentColor"
             >
@@ -109,10 +114,16 @@ function PaymentStatus() {
             </svg>
             Thanh toán thành công!
           </h2>
-          <p className="text-gray-700 mb-4">
-            Cảm ơn bạn đã đặt vé tại Nhà Xe Mỹ Duyên. Dưới đây là thông tin vé của bạn:
+          <p className="text-gray-700 mb-6 text-lg text-center font-roboto">
+            Cảm ơn bạn đã đặt vé tại{" "}
+            <span className="font-bold text-blue-700 font-montserrat">
+              Nhà Xe Mỹ Duyên
+            </span>
+            .
+            <br />
+            Dưới đây là thông tin vé của bạn:
           </p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-gray-700 mb-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 text-gray-700 mb-6 text-base">
             <p>
               <span className="font-semibold">Khách hàng:</span> {customer_name}
             </p>
@@ -123,7 +134,8 @@ function PaymentStatus() {
               <span className="font-semibold">Email:</span> {email}
             </p>
             <p>
-              <span className="font-semibold">Chuyến xe:</span> {pickup} → {dropoff}
+              <span className="font-semibold">Chuyến xe:</span> {pickup} →{" "}
+              {dropoff}
             </p>
             <p>
               <span className="font-semibold">Thời gian khởi hành:</span>{" "}
@@ -138,59 +150,83 @@ function PaymentStatus() {
             <p>
               <span className="font-semibold">Biển số xe:</span> {vehicle_plate}
             </p>
-            <p>
+            <p className="sm:col-span-2">
               <span className="font-semibold">Ghi chú:</span> {note}
             </p>
-            <p>
-              <span className="font-semibold">Tổng tiền:</span> {total}đ
+            <p className="sm:col-span-2">
+              <span className="font-semibold">Tổng tiền:</span>{" "}
+              <span className="text-lg text-green-700 font-bold">
+                {total}đ
+              </span>
             </p>
           </div>
-          <div className="mb-4">
-            <p className="text-gray-700 font-semibold">Mã vé của bạn:</p>
+          <div className="mb-6">
+            <p className="text-gray-700 font-semibold mb-2">Mã vé của bạn:</p>
             {ticketCodes.length > 0 ? (
-              ticketCodes.map((code, idx) => (
-                <p key={idx} className="text-green-600 font-bold text-lg">
-                  {code}
-                </p>
-              ))
+              <div className="flex flex-wrap gap-3 justify-center">
+                {ticketCodes.map((code, idx) => (
+                  <span
+                    key={idx}
+                    className="bg-green-100 text-green-700 px-5 py-2 rounded-xl font-bold text-lg font-montserrat border-2 border-green-300 shadow"
+                  >
+                    {code}
+                  </span>
+                ))}
+              </div>
             ) : (
               <p className="text-gray-600">Không có mã vé.</p>
             )}
           </div>
-          <p className="text-gray-600 mb-6">
+          <p className="text-gray-600 mb-8 text-center">
             Thông tin vé đã được gửi qua email và SMS. Vui lòng kiểm tra!
           </p>
-          <div className="flex justify-center gap-4">
+          <div className="flex flex-col sm:flex-row justify-center gap-4">
             <button
               onClick={() => navigate("/tickets")}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              className="px-8 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors font-semibold font-montserrat text-lg shadow"
             >
               Tra cứu vé
             </button>
             <button
-              onClick={() => navigate("/search")}
-              className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+              onClick={handleFindAnotherTrip}
+              className="px-8 py-3 bg-blue-500 text-white rounded-xl hover:bg-blue-600 transition-colors font-semibold font-montserrat text-lg shadow"
             >
               Tìm chuyến xe khác
             </button>
           </div>
         </div>
       ) : (
-        <div className="bg-red-50 p-6 rounded-lg text-center">
-          <h2 className="text-2xl font-bold text-red-600 mb-4">Thanh toán thất bại</h2>
-          <p className="text-red-700 mb-6">
+        <div className="bg-gradient-to-br from-red-50 via-white to-blue-50 p-10 rounded-3xl shadow-2xl border-2 border-red-200 text-center">
+          <h2 className="text-3xl font-extrabold text-red-600 mb-6 font-montserrat flex items-center gap-2 justify-center">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="h-10 w-10"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M6 18L18 6M6 6l12 12"
+              />
+            </svg>
+            Thanh toán thất bại
+          </h2>
+          <p className="text-red-700 mb-8 text-lg font-roboto">
             Thanh toán của bạn không thành công. Vui lòng thử lại.
           </p>
-          <div className="flex justify-center gap-4">
+          <div className="flex flex-col sm:flex-row justify-center gap-4">
             <button
-              onClick={() => navigate("/search")}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              onClick={handleFindAnotherTrip}
+              className="px-8 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors font-semibold font-montserrat text-lg shadow"
             >
               Thử lại
             </button>
             <button
               onClick={() => navigate("/tickets")}
-              className="px-4 py-2 bg-gray-400 text-white rounded-lg hover:bg-gray-500 transition-colors"
+              className="px-8 py-3 bg-gray-400 text-white rounded-xl hover:bg-gray-500 transition-colors font-semibold font-montserrat text-lg shadow"
             >
               Tra cứu vé
             </button>

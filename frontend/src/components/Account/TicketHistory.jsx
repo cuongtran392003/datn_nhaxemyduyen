@@ -200,8 +200,9 @@ const TicketHistory = () => {
                       </td>
                       <td className="p-4">
                         <Link
-                          to={`/ticket/${ticket.ticket_id}`}
+                          to={`/ticketdetail/${ticket.ticket_id}`}
                           className="text-indigo-600 hover:underline font-medium"
+                          state={{ ticket }} // Truyền dữ liệu vé sang trang chi tiết
                         >
                           Xem chi tiết
                         </Link>
