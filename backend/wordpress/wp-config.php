@@ -151,8 +151,8 @@ define('JWT_AUTH_SECRET_KEY', 'your-very-secure-secret-key-here');
 
 
 
-// define('WP_HOME', 'https://18a7-113-165-148-205.ngrok-free.app');
-// define('WP_SITEURL', 'https://18a7-113-165-148-205.ngrok-free.app');
+// define('WP_HOME', 'https://05bb-113-23-108-36.ngrok-free.app');
+// define('WP_SITEURL', 'https://05bb-113-23-108-36.ngrok-free.app');
 
 /** Sets up WordPress vars and included files. */
 require_once ABSPATH . 'wp-settings.php';

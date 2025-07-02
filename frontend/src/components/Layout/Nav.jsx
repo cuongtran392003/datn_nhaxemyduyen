@@ -3,6 +3,7 @@ import { Link } from "react-router-dom"; // Chỉ cần Link để tạo liên k
 import { useAuth } from "../contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 import Logo from "../../assets/images/logo.png";
+import NotificationBell from "../Shared/NotificationBell";
 function Nav() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
@@ -164,12 +165,14 @@ function Nav() {
           >
             Tuyển Dụng
           </Link>
-        </li>
-        <li>
+        </li>        <li>
           {user ? (
             <>
+              {/* Notification Bell */}
+              <NotificationBell />
+              
               <button
-                className="relative group text-gray-700 hover:text-blue-600 transition-colors focus:outline-none"
+                className="relative group text-gray-700 hover:text-blue-600 transition-colors focus:outline-none ml-4"
                 onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
               >
                 {user.avatar_url ? (

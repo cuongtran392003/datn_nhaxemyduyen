@@ -1,15 +1,17 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "./contexts/AuthContext"; // Import useAuth
+import { useNotification } from "./contexts/NotificationContext";
 import axios from "axios"; // Import axios
 
 function PaymentStatus() {
   const [order, setOrder] = useState(null);
   const [error, setError] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(true);  const [hasNotified, setHasNotified] = useState(false); // Thêm flag để tránh thông báo lặp
   const navigate = useNavigate();
   const location = useLocation();
   const { token, isLoading: authLoading } = useAuth(); // Get token and auth loading state
+  const { notifyPaymentSuccess, notifyBookingSuccess, notifyError } = useNotification();
 
   useEffect(() => {
     if (authLoading) return; // Wait for auth to initialize
@@ -29,23 +31,54 @@ function PaymentStatus() {
       setError("Không tìm thấy thông tin thanh toán.");
       setLoading(false);
       return;
-    }
-
-    axios
+    }    axios
       .get(`http://localhost:8000/wp-json/nhaxemyduyen/v1/order/${orderId}`)
       .then((response) => {
         if (!response.data || typeof response.data !== "object") {
           throw new Error("Dữ liệu đơn hàng không hợp lệ.");
+        }        setOrder(response.data);
+        
+        // Thêm thông báo thanh toán thành công nếu responseCode là 00 và chưa thông báo
+        const notificationKey = `payment_notified_${orderId}`;
+        const hasAlreadyNotified = localStorage.getItem(notificationKey);
+          if (responseCode === "00" && !hasAlreadyNotified && !hasNotified) {
+          // Thông báo thanh toán thành công
+          notifyPaymentSuccess({
+            amount: response.data.total,
+            orderId: orderId,
+            transactionRef: orderId,
+            method: "VNPAY"
+          });
+          
+          // Thông báo đặt vé thành công
+          notifyBookingSuccess({
+            seatCount: 1, // Có thể lấy từ response.data nếu có
+            route: "Chuyến xe đã thanh toán",
+            totalAmount: response.data.total,
+            departureTime: response.data.trip_info?.departure_time,
+            ticketCode: orderId
+          });
+          
+          // Đánh dấu đã thông báo
+          localStorage.setItem(notificationKey, 'true');
+          setHasNotified(true);
         }
-        setOrder(response.data);
+        
         setLoading(false);
       })
       .catch((err) => {
         const message = err.response?.data?.message || err.message;
         setError("Lỗi khi kiểm tra trạng thái đơn hàng: " + message);
+        
+        // Thêm thông báo lỗi
+        notifyError({
+          message: message,
+          details: { orderId, responseCode }
+        });
+        
         setLoading(false);
       });
-  }, [location, navigate, token, authLoading]);
+  }, [location, navigate, token, authLoading, notifyPaymentSuccess, notifyBookingSuccess, notifyError, hasNotified]);
 
   // Hàm xử lý tìm chuyến xe khác: reset bộ lọc và chuyển về trang tìm kiếm
   const handleFindAnotherTrip = () => {

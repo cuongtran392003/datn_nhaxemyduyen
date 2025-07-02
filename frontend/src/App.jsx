@@ -18,17 +18,19 @@ import SearchResults from "./components/pages/SearchResults";
 import SignUp from "./components/Account/SignUp";
 import SignIn from "./components/Account/SignIn";
 import { AuthProvider } from "./components/contexts/AuthContext";
+import { NotificationProvider } from "./components/contexts/NotificationContext";
 import ForgotPassword from "./components/Account/ForgotPassword";
 import ResetPassword from "./components/Account/ResetPassword";
 import ScrollToTop from "./components/ScrollToTop";
 import PaymentStatus from "./components/PaymentStatus";
 import CSKH from "./components/Shared/CSKH";
+import ToastNotification from "./components/Shared/ToastNotification";
 import NewsDetail from "./components/News/NewsDetail";
 import ProFile from "./components/Account/ProFile";
 import TicketHistory from "./components/Account/TicketHistory";
 import TicketDetail from "./components/pages/TicketDetail";
+import NotificationPage from "./components/pages/NotificationPage";
 
-import MetaTags from "./components/Shared/MetaTags";
 
 
 
@@ -42,6 +44,7 @@ function Layout() {
         <Header />
       )}
       <CSKH/>
+      <ToastNotification/>
       <main className="container mx-auto font-poppins">
         <Routes>
           <Route path="/" element={<Home />} />
@@ -72,6 +75,7 @@ function Layout() {
           <Route path="/profile" element={<ProFile/>} />
           <Route path="/booking-history" element={<TicketHistory/>} />
           <Route path="/ticketdetail/:ticket_id" element={<TicketDetail/>}/>
+          <Route path="/notifications" element={<NotificationPage/>} />
         </Routes>
       </main>
       {location.pathname !== "/signup" && location.pathname !== "/signin" && (
@@ -86,7 +90,9 @@ function App() {
     <Router>
       <ScrollToTop />
       <AuthProvider>
-        <Layout />
+        <NotificationProvider>
+          <Layout />
+        </NotificationProvider>
       </AuthProvider>
     </Router>
   );

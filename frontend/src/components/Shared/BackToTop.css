@@ -1,0 +1,218 @@
+/* Enhanced BackToTop Component Styles - Compact Version */
+
+/* Custom animations */
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-3px);
+  }
+}
+
+@keyframes loading-pulse {
+  0%, 100% {
+    filter: drop-shadow(0 0 3px rgba(59, 130, 246, 0.4));
+  }
+  50% {
+    filter: drop-shadow(0 0 8px rgba(59, 130, 246, 0.8));
+  }
+}
+
+@keyframes bounce-in-compact {
+  0% {
+    transform: scale(0.3) translateY(50px);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.1) translateY(-5px);
+  }
+  70% {
+    transform: scale(0.95) translateY(0px);
+  }
+  100% {
+    transform: scale(1) translateY(0px);
+    opacity: 1;
+  }
+}
+
+@keyframes progress-loading {
+  0% {
+    stroke-dashoffset: calc(2 * 3.14159 * 42);
+  }
+  100% {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* BackToTop container - compact */
+.back-to-top-container {
+  animation: bounce-in-compact 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+.back-to-top-container:hover {
+  animation: float 1.5s ease-in-out infinite;
+}
+
+/* Progress circle with loading effect */
+.progress-circle {
+  filter: drop-shadow(0 0 4px rgba(59, 130, 246, 0.3));
+  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.progress-circle:hover {
+  animation: loading-pulse 1.5s ease-in-out infinite;
+}
+
+/* Button with compact design */
+.back-to-top-btn {
+  position: relative;
+  overflow: hidden;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.back-to-top-btn::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  background: radial-gradient(circle, rgba(59, 130, 246, 0.2) 0%, transparent 70%);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+}
+
+.back-to-top-btn:hover::before {
+  width: 150%;
+  height: 150%;
+}
+
+.back-to-top-btn:active {
+  transform: scale(0.95);
+}
+
+/* Icon animations - subtle */
+.arrow-icon {
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.back-to-top-btn:hover .arrow-icon {
+  transform: translateY(-1px);
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.1));
+}
+
+/* Compact tooltip */
+.tooltip {
+  transform: translateX(5px);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.back-to-top-container:hover .tooltip {
+  transform: translateX(0);
+}
+
+/* Simplified particle effects */
+.particle {
+  animation: ping 1s ease-out infinite;
+}
+
+.particle:nth-child(1) {
+  animation-delay: 0.1s;
+}
+
+.particle:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+/* Mobile optimizations */
+@media (max-width: 768px) {
+  .back-to-top-container {
+    transform: scale(0.95);
+  }
+  
+  .back-to-top-container:hover {
+    animation: none; /* Disable float on mobile */
+  }
+  
+  .tooltip {
+    display: none !important;
+  }
+  
+  .progress-circle {
+    filter: drop-shadow(0 0 2px rgba(59, 130, 246, 0.3));
+  }
+}
+
+/* Reduced motion for accessibility */
+@media (prefers-reduced-motion: reduce) {
+  .back-to-top-container,
+  .progress-circle,
+  .back-to-top-btn,
+  .arrow-icon,
+  .tooltip,
+  .particle {
+    animation: none !important;
+    transition: opacity 0.2s ease !important;
+  }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  .back-to-top-btn {
+    border: 2px solid currentColor;
+  }
+  
+  .progress-circle {
+    filter: none;
+  }
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  .back-to-top-btn {
+    background: yellow;
+    border-color: rgba(75, 85, 99, 0.3);
+  }
+  
+  .back-to-top-btn:hover {
+    background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+  }
+  
+  .tooltip > div {
+    background: rgba(17, 24, 39, 0.95);
+    border: 1px solid rgba(75, 85, 99, 0.3);
+  }
+}
+
+/* Print styles */
+@media print {
+  .back-to-top-container {
+    display: none !important;
+  }
+}
+
+/* Focus styles for keyboard navigation */
+.back-to-top-btn:focus {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+}
+
+.back-to-top-btn:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* Loading state */
+.back-to-top-loading .progress-circle {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}

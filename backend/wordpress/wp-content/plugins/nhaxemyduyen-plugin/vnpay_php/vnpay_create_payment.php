@@ -57,4 +57,3 @@ if (isset($vnp_HashSecret)) {
 }
 header('Location: ' . $vnp_Url);
 die();
-

@@ -1,0 +1,52 @@
+/* MessageFormatter.css - Styles for formatted chatbot messages */
+
+.formatted-message {
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.message-line {
+  margin-bottom: 4px;
+}
+
+.message-line:last-child {
+  margin-bottom: 0;
+}
+
+.message-list {
+  margin: 4px 0;
+  padding-left: 20px;
+}
+
+.message-list-item {
+  margin-bottom: 4px;
+}
+
+.message-list-item:last-child {
+  margin-bottom: 0;
+}
+
+/* Link trong tin nhắn */
+.message-link {
+  color: #2563eb;
+  text-decoration: underline;
+  word-break: break-all;
+}
+
+/* Trong chatbot message (bot) */
+.message.bot .message-link {
+  color: #2563eb;
+}
+
+/* Trong user message (user) */
+.message.user .message-link {
+  color: rgba(255, 255, 255, 0.9);
+  text-decoration-color: rgba(255, 255, 255, 0.7);
+}
+
+/* Dark mode */
+@media (prefers-color-scheme: dark) {
+  .message.bot .message-link {
+    color: #3b82f6;
+  }
+}

@@ -101,13 +101,395 @@ function nhaxemyduyen_force_utf8() {
 
 // Trang Dashboard chính
 function nhaxemyduyen_dashboard() {
+    global $wpdb;
+    
+    // Thiết lập múi giờ Việt Nam
+    date_default_timezone_set('Asia/Ho_Chi_Minh');
+    
+    // Kiểm tra quyền truy cập
+    if (!current_user_can('manage_options')) {
+        wp_die('Bạn không có quyền truy cập trang này.');
+    }
+    
+    // Đăng ký CSS và JS
+    wp_enqueue_style('tailwind-css', 'https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css', array(), null);
+    wp_enqueue_script('chart-js', 'https://cdn.jsdelivr.net/npm/chart.js', array(), null, true);
+    
+    // Lấy dữ liệu thống kê tổng quan
+    $table_tickets = $wpdb->prefix . 'tickets';
+    $table_trips = $wpdb->prefix . 'trips';
+    $table_drivers = $wpdb->prefix . 'drivers';
+    $table_locations = $wpdb->prefix . 'locations';
+    $table_routes = $wpdb->prefix . 'routes';
+    
+    // Thống kê tổng quan
+    $total_trips = $wpdb->get_var("SELECT COUNT(*) FROM $table_trips") ?: 0;
+    $total_drivers = $wpdb->get_var("SELECT COUNT(*) FROM $table_drivers") ?: 0;
+    $total_locations = $wpdb->get_var("SELECT COUNT(*) FROM $table_locations") ?: 0;
+    $total_routes = $wpdb->get_var("SELECT COUNT(*) FROM $table_routes") ?: 0;
+    
+    // Thống kê hôm nay
+    $today = date('Y-m-d');
+    $today_revenue = $wpdb->get_var($wpdb->prepare("
+        SELECT SUM(tr.price)
+        FROM $table_tickets t
+        JOIN $table_trips tr ON t.trip_id = tr.trip_id
+        WHERE t.status = 'Đã thanh toán' AND DATE(t.created_at) = %s
+    ", $today)) ?: 0;
+    
+    $today_tickets = $wpdb->get_var($wpdb->prepare("
+        SELECT COUNT(*)
+        FROM $table_tickets t
+        JOIN $table_trips tr ON t.trip_id = tr.trip_id
+        WHERE t.status = 'Đã thanh toán' AND DATE(t.created_at) = %s
+    ", $today)) ?: 0;
+    
+    $today_trips = $wpdb->get_var($wpdb->prepare("
+        SELECT COUNT(*)
+        FROM $table_trips
+        WHERE DATE(departure_time) = %s
+    ", $today)) ?: 0;
+    
+    // Lấy hoạt động gần đây (5 vé gần nhất)
+    $recent_tickets = $wpdb->get_results($wpdb->prepare("
+        SELECT t.*, tr.departure_time, l1.name as from_location, l2.name as to_location
+        FROM $table_tickets t
+        JOIN $table_trips tr ON t.trip_id = tr.trip_id
+        JOIN {$wpdb->prefix}routes r ON tr.route_id = r.route_id
+        JOIN $table_locations l1 ON r.from_location_id = l1.location_id
+        JOIN $table_locations l2 ON r.to_location_id = l2.location_id
+        ORDER BY t.created_at DESC
+        LIMIT 5
+    "), ARRAY_A);
+    
+    // Lấy dữ liệu biểu đồ (7 ngày gần nhất)
+    $chart_data = [];
+    $chart_labels = [];
+    for ($i = 6; $i >= 0; $i--) {
+        $date = date('Y-m-d', strtotime("-$i days"));
+        $revenue = $wpdb->get_var($wpdb->prepare("
+            SELECT SUM(tr.price)
+            FROM $table_tickets t
+            JOIN $table_trips tr ON t.trip_id = tr.trip_id
+            WHERE t.status = 'Đã thanh toán' AND DATE(t.created_at) = %s
+        ", $date)) ?: 0;
+        
+        $chart_data[] = $revenue;
+        $chart_labels[] = date('d/m', strtotime($date));
+    }
+    
     ?>
-    <div class="wrap nhaxe-wrap">
-        <h1 class="nhaxe-title">Quản lý Nhà Xe Mỹ Duyên</h1>
-        <div class="nhaxe-card">
-            <p>Chào mừng đến với hệ thống quản lý Nhà Xe Mỹ Duyên. Vui lòng chọn một mục từ menu bên trái để bắt đầu.</p>
+    <div class="min-h-screen bg-gray-50 py-6">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <!-- Header -->
+            <div class="mb-8">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <h1 class="text-3xl font-bold text-gray-900">🚌 Dashboard Nhà Xe Mỹ Duyên</h1>
+                        <p class="mt-2 text-lg text-gray-600">Tổng quan hoạt động kinh doanh</p>
+                    </div>
+                    <div class="text-right">
+                        <div class="text-sm text-gray-500">Thời gian hiện tại (UTC+7)</div>
+                        <div class="text-lg font-semibold text-gray-900 current-time">
+                            🕐 <?php echo date('d/m/Y H:i:s'); ?>
+                        </div>
+                        <div class="text-sm text-blue-600 mt-1">
+                            📅 Hôm nay: <?php echo date('d/m/Y'); ?>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Stats Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                <!-- Doanh thu hôm nay -->
+                <div class="stats-card bg-gradient-to-r from-green-500 to-green-600 rounded-xl p-6 text-white shadow-lg">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-white text-sm font-medium opacity-90">Doanh thu hôm nay</p>
+                            <p class="stats-number text-2xl font-bold text-white"><?php echo number_format($today_revenue, 0, ',', '.'); ?> ₫</p>
+                            <p class="text-white text-sm mt-1 opacity-80">
+                                <?php echo $today_tickets; ?> vé đã bán
+                            </p>
+                        </div>
+                        <div class="text-4xl opacity-80">💰</div>
+                    </div>
+                </div>
+
+                <!-- Chuyến xe hôm nay -->
+                <div class="stats-card bg-gradient-to-r from-blue-500 to-blue-600 rounded-xl p-6 text-white shadow-lg">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-white text-sm font-medium opacity-90">Chuyến xe hôm nay</p>
+                            <p class="stats-number text-2xl font-bold text-white"><?php echo $today_trips; ?></p>
+                            <p class="text-white text-sm mt-1 opacity-80">
+                                Tổng: <?php echo $total_trips; ?> chuyến
+                            </p>
+                        </div>
+                        <div class="text-4xl opacity-80">🚌</div>
+                    </div>
+                </div>
+
+                <!-- Tài xế -->
+                <div class="stats-card bg-gradient-to-r from-purple-500 to-purple-600 rounded-xl p-6 text-white shadow-lg">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-white text-sm font-medium opacity-90">Tài xế</p>
+                            <p class="stats-number text-2xl font-bold text-white"><?php echo $total_drivers; ?></p>
+                            <p class="text-white text-sm mt-1 opacity-80">
+                                Đang hoạt động
+                            </p>
+                        </div>
+                        <div class="text-4xl opacity-80">👨‍💼</div>
+                    </div>
+                </div>
+
+                <!-- Tuyến đường -->
+                <div class="stats-card bg-gradient-to-r from-blue-500 to-pink-600 rounded-xl p-6 text-white shadow-lg">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-white text-sm font-medium opacity-90">Tuyến đường</p>
+                            <p class="stats-number text-2xl font-bold text-white"><?php echo $total_routes; ?></p>
+                            <p class="text-white text-sm mt-1 opacity-80">
+                                <?php echo $total_locations; ?> địa điểm
+                            </p>
+                        </div>
+                        <div class="text-4xl opacity-80">🗺️</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <!-- Biểu đồ doanh thu 7 ngày -->
+                <div class="lg:col-span-2 bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                    <div class="mb-6">
+                        <h2 class="text-xl font-bold text-gray-900">📈 Doanh thu 7 ngày gần nhất</h2>
+                        <p class="text-gray-600 mt-1">Tổng quan xu hướng kinh doanh</p>
+                    </div>
+                    
+                    <div class="chart-container relative" style="height: 300px;">
+                        <canvas id="revenueChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Hoạt động gần đây -->
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                    <div class="mb-6">
+                        <h2 class="text-xl font-bold text-gray-900">🎫 Vé đặt gần đây</h2>
+                        <p class="text-gray-600 mt-1">5 giao dịch mới nhất</p>
+                    </div>
+                    
+                    <div class="space-y-4">
+                        <?php if (empty($recent_tickets)) : ?>
+                            <div class="text-center text-gray-500 py-8">
+                                <div class="text-4xl mb-2">📝</div>
+                                <p>Chưa có vé nào được đặt</p>
+                            </div>
+                        <?php else : ?>
+                            <?php foreach ($recent_tickets as $ticket) : ?>
+                                <div class="flex items-center p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                                    <div class="flex-shrink-0 w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+                                        <span class="text-blue-600 font-semibold text-sm"><?php echo substr($ticket['passenger_name'], 0, 1); ?></span>
+                                    </div>
+                                    <div class="ml-3 flex-1 min-w-0">
+                                        <p class="text-sm font-medium text-gray-900 truncate">
+                                            <?php echo esc_html($ticket['passenger_name']); ?>
+                                        </p>
+                                        <p class="text-xs text-gray-500">
+                                            <?php echo esc_html($ticket['from_location']); ?> → <?php echo esc_html($ticket['to_location']); ?>
+                                        </p>
+                                        <p class="text-xs text-gray-400">
+                                            <?php echo date('d/m H:i', strtotime($ticket['created_at'])); ?>
+                                        </p>
+                                    </div>
+                                    <div class="text-right">
+                                        <span class="text-sm font-semibold text-gray-900">
+                                            <?php echo number_format($ticket['price'], 0, ',', '.'); ?>₫
+                                        </span>
+                                        <br>
+                                        <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium <?php echo $ticket['status'] === 'Đã thanh toán' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'; ?>">
+                                            <?php echo esc_html($ticket['status']); ?>
+                                        </span>
+                                    </div>
+                                </div>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Links -->
+            <div class="mt-8 bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <h2 class="text-xl font-bold text-gray-900 mb-6">🔗 Truy cập nhanh</h2>
+                <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                    <a href="?page=nhaxemyduyen-stats" class="flex flex-col items-center p-4 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors group">
+                        <div class="text-2xl mb-2 group-hover:scale-110 transition-transform">📊</div>
+                        <span class="text-sm font-medium text-gray-900">Thống kê</span>
+                    </a>
+                    <a href="?page=nhaxemyduyen-trips" class="flex flex-col items-center p-4 bg-green-50 rounded-lg hover:bg-green-100 transition-colors group">
+                        <div class="text-2xl mb-2 group-hover:scale-110 transition-transform">🚌</div>
+                        <span class="text-sm font-medium text-gray-900">Chuyến xe</span>
+                    </a>
+                    <a href="?page=nhaxemyduyen-tickets" class="flex flex-col items-center p-4 bg-purple-50 rounded-lg hover:bg-purple-100 transition-colors group">
+                        <div class="text-2xl mb-2 group-hover:scale-110 transition-transform">🎫</div>
+                        <span class="text-sm font-medium text-gray-900">Vé xe</span>
+                    </a>
+                    <a href="?page=nhaxemyduyen-drivers" class="flex flex-col items-center p-4 bg-orange-50 rounded-lg hover:bg-orange-100 transition-colors group">
+                        <div class="text-2xl mb-2 group-hover:scale-110 transition-transform">👨‍💼</div>
+                        <span class="text-sm font-medium text-gray-900">Tài xế</span>
+                    </a>
+                    <a href="?page=nhaxemyduyen-routes" class="flex flex-col items-center p-4 bg-red-50 rounded-lg hover:bg-red-100 transition-colors group">
+                        <div class="text-2xl mb-2 group-hover:scale-110 transition-transform">🗺️</div>
+                        <span class="text-sm font-medium text-gray-900">Tuyến đường</span>
+                    </a>
+                    <a href="?page=nhaxemyduyen-locations" class="flex flex-col items-center p-4 bg-indigo-50 rounded-lg hover:bg-indigo-100 transition-colors group">
+                        <div class="text-2xl mb-2 group-hover:scale-110 transition-transform">📍</div>
+                        <span class="text-sm font-medium text-gray-900">Địa điểm</span>
+                    </a>
+                </div>
+            </div>
         </div>
     </div>
+
+    <style>
+        /* Custom styles for dashboard */
+        .stats-card {
+            transition: all 0.3s ease;
+        }
+        
+        .stats-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+        }
+        
+        .stats-number {
+            animation: countUp 0.8s ease-out;
+        }
+        
+        @keyframes countUp {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .chart-container {
+            background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+            border-radius: 12px;
+            padding: 15px;
+        }
+        
+        /* Quick links hover effects */
+        .group:hover .text-2xl {
+            animation: bounce 0.6s ease-in-out;
+        }
+        
+        @keyframes bounce {
+            0%, 20%, 60%, 100% { transform: translateY(0); }
+            40% { transform: translateY(-5px); }
+            80% { transform: translateY(-2px); }
+        }
+        
+        @media (max-width: 768px) {
+            .stats-card {
+                margin-bottom: 1rem;
+            }
+        }
+    </style>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Cập nhật thời gian real-time
+            function updateCurrentTime() {
+                const now = new Date();
+                const options = {
+                    timeZone: 'Asia/Ho_Chi_Minh',
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit'
+                };
+                
+                const vnTime = new Intl.DateTimeFormat('vi-VN', options).format(now);
+                const timeElement = document.querySelector('.current-time');
+                if (timeElement) {
+                    timeElement.textContent = '🕐 ' + vnTime.replace(/(\d{2})\/(\d{2})\/(\d{4}), (\d{2}):(\d{2}):(\d{2})/, '$1/$2/$3 $4:$5:$6');
+                }
+            }
+            
+            setInterval(updateCurrentTime, 1000);
+
+            // Khởi tạo biểu đồ doanh thu
+            const ctx = document.getElementById('revenueChart').getContext('2d');
+            
+            const chart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: <?php echo json_encode($chart_labels); ?>,
+                    datasets: [{
+                        label: 'Doanh thu (VNĐ)',
+                        data: <?php echo json_encode($chart_data); ?>,
+                        borderColor: 'rgb(59, 130, 246)',
+                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                        borderWidth: 3,
+                        fill: true,
+                        tension: 0.4,
+                        pointBackgroundColor: 'rgb(59, 130, 246)',
+                        pointBorderColor: 'white',
+                        pointBorderWidth: 2,
+                        pointRadius: 6,
+                        pointHoverRadius: 8
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                            titleColor: 'white',
+                            bodyColor: 'white',
+                            borderColor: 'rgb(59, 130, 246)',
+                            borderWidth: 1,
+                            cornerRadius: 8,
+                            callbacks: {
+                                label: function(context) {
+                                    return 'Doanh thu: ' + context.parsed.y.toLocaleString('vi-VN') + ' VNĐ';
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                callback: function(value) {
+                                    return value.toLocaleString('vi-VN') + ' ₫';
+                                }
+                            },
+                            grid: {
+                                color: 'rgba(0, 0, 0, 0.1)'
+                            }
+                        },
+                        x: {
+                            grid: {
+                                color: 'rgba(0, 0, 0, 0.1)'
+                            }
+                        }
+                    },
+                    interaction: {
+                        intersect: false,
+                        mode: 'index'
+                    }
+                }
+            });
+
+            console.log('Dashboard đã tải thành công!');
+        });
+    </script>
     <?php
 }
 
@@ -867,10 +1249,14 @@ function nhaxemyduyen_manage_routes() {
                                     <td class="px-4 py-3 text-sm text-gray-900"><?php echo esc_html(format_duration_to_hhmm($route['duration'])); ?></td>
                                     <td class="px-4 py-3 text-sm text-gray-900">
                                         <?php if (!empty($route['bus_image'])) : ?>
-                                            <img src="<?php echo esc_url($route['bus_image']); ?>" alt="Bus Image" class="max-w-[50px] rounded-lg" />
-                                        <?php else : ?>
+                                            <img src="<?php echo esc_url($route['bus_image']); ?>" alt="Bus Image" class="max-w-[50px] rounded-lg zoom-img" id="zoomTarget" />
+                                            <div class="overlay" id="overlay">
+                                            <img src="" alt="Zoomed" id="zoomedImage" />
+                                        </div>
+                                            <?php else : ?>
                                             Không có ảnh
                                         <?php endif; ?>
+                                        
                                     </td>
                                     <td class="px-4 py-3 text-sm text-gray-900"><?php echo esc_html($route['created_at']); ?></td>
                                     <td class="px-4 py-3 text-sm text-gray-900"><?php echo esc_html($route['updated_at']); ?></td>
@@ -917,6 +1303,26 @@ function nhaxemyduyen_manage_routes() {
                 space-y: 4px;
             }
         }
+        .zoom-img {
+      cursor: pointer;
+      transition: transform 0.3s ease;
+    }
+
+    .overlay {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      background: rgba(0,0,0,0.8);
+      display: none;
+      justify-content: center;
+      align-items: center;
+      z-index: 999;
+    }
+
+    .overlay img {
+      max-width: 90%;
+      max-height: 90%;
+    }
     </style>
 
     <script>
@@ -926,6 +1332,22 @@ function nhaxemyduyen_manage_routes() {
         }
 
         jQuery(document).ready(function($) {
+            // phóng to ảnh khi click
+            const zoomTarget = document.getElementById('zoomTarget');
+            const overlay = document.getElementById('overlay');
+            const zoomedImage = document.getElementById('zoomedImage');
+
+            // Kiểm tra elements tồn tại trước khi thêm event listeners
+            if (zoomTarget && overlay && zoomedImage) {
+                zoomTarget.addEventListener('click', () => {
+                    zoomedImage.src = zoomTarget.src;
+                    overlay.style.display = 'flex';
+                });
+
+                overlay.addEventListener('click', () => {
+                    overlay.style.display = 'none';
+                });
+            }
             // Xử lý sự kiện click cho nút Thêm/Sửa
             $(document).on('click', '.nhaxe-toggle-form', function(e) {
                 e.preventDefault();
@@ -1687,6 +2109,12 @@ function nhaxemyduyen_manage_trips() {
 
     <script>
         jQuery(document).ready(function($) {
+            // Định nghĩa ajaxurl cho admin
+            var ajaxurl = '<?php echo admin_url('admin-ajax.php'); ?>';
+            
+            console.log('Document ready - nhaxemyduyen trips page'); // Debug log
+            console.log('Found toggle buttons:', $('.nhaxe-toggle-form').length); // Debug log
+            
             // Khởi tạo Datepicker với ngày hiện tại
             $('#filter_departure_date').datepicker({
                 dateFormat: 'mm/dd/yy',
@@ -1835,12 +2263,15 @@ function nhaxemyduyen_manage_trips() {
                 }
             });
 
-              // Toggle form thêm/sửa chuyến xe
+            // Toggle form thêm/sửa chuyến xe
             $(document).on('click', '.nhaxe-toggle-form', function() {
+                console.log('Toggle form clicked'); // Debug log
                 var action = $(this).data('action');
                 var tripId = $(this).data('trip-id');
+                console.log('Action:', action, 'Trip ID:', tripId); // Debug log
 
                 if (action === 'add') {
+                    console.log('Adding new trip'); // Debug log
                     // Reset form về trạng thái thêm mới
                     $('#trip_action').val('add');
                     $('#trip_id').val('');
@@ -1850,6 +2281,7 @@ function nhaxemyduyen_manage_trips() {
                     $('.nhaxe-image-preview').html('');
                     $('#submit-trip').text('Thêm Chuyến Xe');
                     $('.nhaxe-add-form').removeClass('hidden');
+                    console.log('Form should now be visible'); // Debug log
                 } else if (action === 'edit' && tripId) {
                     // Lấy dữ liệu chuyến xe và nạp vào form
                     $.ajax({
@@ -1894,6 +2326,7 @@ function nhaxemyduyen_manage_trips() {
                         }
                     });
                 } else {
+                    console.log('Hiding form or other action'); // Debug log
                     // Ẩn form khi bấm Hủy hoặc không hợp lệ
                     $('.nhaxe-add-form').addClass('hidden');
                 }
@@ -2367,9 +2800,9 @@ use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
 // Đăng ký stylesheet (nếu cần)
-if (file_exists(plugin_dir_path(__FILE__) . 'admin-style.css')) {
-    wp_enqueue_style('nhaxemyduyen-admin-style', plugin_dir_url(__FILE__) . 'admin-style.css');
-}
+// if (file_exists(plugin_dir_path(__FILE__) . 'admin-style.css')) {
+//     wp_enqueue_style('nhaxemyduyen-admin-style', plugin_dir_url(__FILE__) . 'admin-style.css');
+// }
 
 // Quản lý vé xe
 function nhaxemyduyen_manage_tickets() {
@@ -2498,9 +2931,7 @@ function nhaxemyduyen_manage_tickets() {
             }
 
             wp_send_json_success(['message' => 'Trạng thái vé đã được cập nhật thành công.', 'ticket_id' => $ticket_id, 'status' => $status]);
-        }
-
-        // Xử lý hủy vé
+        }        // Xử lý hủy vé
         if ($_POST['nhaxemyduyen_action'] === 'cancel_ticket') {
             if (!check_admin_referer('nhaxemyduyen_cancel_ticket', 'nhaxemyduyen_cancel_nonce')) {
                 error_log('Cancel ticket: Invalid nonce');
@@ -2522,16 +2953,16 @@ function nhaxemyduyen_manage_tickets() {
             // Start transaction
             $wpdb->query('START TRANSACTION');
 
-            // Update ticket status
-            $result = $wpdb->update(
+            // Xóa vé khỏi database thay vì cập nhật trạng thái
+            $result = $wpdb->delete(
                 $table_tickets,
-                array('status' => 'Đã hủy', 'updated_at' => current_time('mysql')),
-                array('ticket_id' => $ticket_id)
+                array('ticket_id' => $ticket_id),
+                array('%d')
             );
             if ($result === false) {
                 $wpdb->query('ROLLBACK');
-                error_log('Cancel ticket error: ' . $wpdb->last_error);
-                wp_send_json_error(['message' => 'Lỗi khi hủy vé: ' . $wpdb->last_error]);
+                error_log('Delete ticket error: ' . $wpdb->last_error);
+                wp_send_json_error(['message' => 'Lỗi khi xóa vé: ' . $wpdb->last_error]);
             }
 
             // Update available seats
@@ -2556,7 +2987,7 @@ function nhaxemyduyen_manage_tickets() {
             // Commit transaction
             $wpdb->query('COMMIT');
 
-            wp_send_json_success(['message' => 'Vé đã được hủy thành công.', 'ticket_id' => $ticket_id, 'status' => 'Đã hủy']);
+            wp_send_json_success(['message' => 'Vé đã được xóa thành công.', 'ticket_id' => $ticket_id, 'action' => 'deleted']);
         }
 
         // Xử lý lọc chuyến xe
@@ -2897,9 +3328,7 @@ function nhaxemyduyen_manage_tickets() {
         <?php endif; ?>
 
         <div class="bg-white shadow-lg rounded-lg p-6">
-            <h2 class="text-2xl font-semibold text-gray-800 mb-4">Danh sách Vé Xe</h2>
-
-            <!-- Filter Form -->
+            <h2 class="text-2xl font-semibold text-gray-800 mb-4">Danh sách Vé Xe</h2>            <!-- Filter Form -->
             <form id="nhaxe-filter-form" method="get" action="" class="mb-6">
                 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
                     <input type="text" name="filter_customer_phone" 
@@ -2917,11 +3346,89 @@ function nhaxemyduyen_manage_tickets() {
                             </option>
                         <?php endforeach; ?>
                     </select>
+                    <select name="filter_status" id="filter_status" class="border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500">
+                        <option value="">-- Tất cả trạng thái --</option>
+                        <option value="Đã thanh toán" <?php selected($filter_status, 'Đã thanh toán'); ?>>Đã thanh toán</option>
+                        <option value="Chưa thanh toán" <?php selected($filter_status, 'Chưa thanh toán'); ?>>Chưa thanh toán</option>
+                        <option value="Đã hủy" <?php selected($filter_status, 'Đã hủy'); ?>>Đã hủy</option>
+                    </select>
                     <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition">Tìm kiếm</button>
-                    <a href="#" id="nhaxe-export-excel" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition inline-block" 
-                    data-base-url="<?php echo admin_url('admin-post.php?action=nhaxemyduyen_export_tickets&nhaxemyduyen_export_nonce=' . wp_create_nonce('nhaxemyduyen_export_nonce')); ?>">
-                        Xuất Excel
-                    </a>
+                </div>
+                  <!-- Export Options -->
+                <div class="mt-4 export-options">
+                    <div class="flex flex-col lg:flex-row lg:items-center lg:space-x-4 space-y-4 lg:space-y-0">
+                        <div class="flex items-center">
+                            <label class="text-sm font-medium text-gray-700 mr-3">Chọn trường xuất Excel:</label>
+                        </div>
+                        <div class="flex flex-wrap gap-x-4 gap-y-2">
+                            <label class="flex items-center">
+                                <input type="checkbox" id="export_all" checked class="mr-1"> 
+                                <span class="text-sm">Tất cả</span>
+                            </label>
+                            <label class="flex items-center">
+                                <input type="checkbox" class="export-field mr-1" data-field="ticket_code" checked> 
+                                <span class="text-sm">Mã vé</span>
+                            </label>
+                            <label class="flex items-center">
+                                <input type="checkbox" class="export-field mr-1" data-field="customer_name" checked> 
+                                <span class="text-sm">Khách hàng</span>
+                            </label>
+                            <label class="flex items-center">
+                                <input type="checkbox" class="export-field mr-1" data-field="customer_phone" checked> 
+                                <span class="text-sm">SĐT</span>
+                            </label>
+                            <label class="flex items-center">
+                                <input type="checkbox" class="export-field mr-1" data-field="customer_email"> 
+                                <span class="text-sm">Email</span>
+                            </label>
+                            <label class="flex items-center">
+                                <input type="checkbox" class="export-field mr-1" data-field="from_location" checked> 
+                                <span class="text-sm">Điểm đi</span>
+                            </label>
+                            <label class="flex items-center">
+                                <input type="checkbox" class="export-field mr-1" data-field="to_location" checked> 
+                                <span class="text-sm">Điểm đến</span>
+                            </label>
+                            <label class="flex items-center">
+                                <input type="checkbox" class="export-field mr-1" data-field="pickup_location"> 
+                                <span class="text-sm">Điểm đón</span>
+                            </label>
+                            <label class="flex items-center">
+                                <input type="checkbox" class="export-field mr-1" data-field="dropoff_location"> 
+                                <span class="text-sm">Điểm trả</span>
+                            </label>
+                            <label class="flex items-center">
+                                <input type="checkbox" class="export-field mr-1" data-field="driver_name"> 
+                                <span class="text-sm">Tài xế</span>
+                            </label>
+                            <label class="flex items-center">
+                                <input type="checkbox" class="export-field mr-1" data-field="vehicle_plate"> 
+                                <span class="text-sm">Phương tiện</span>
+                            </label>
+                            <label class="flex items-center">
+                                <input type="checkbox" class="export-field mr-1" data-field="departure_time" checked> 
+                                <span class="text-sm">Giờ đi</span>
+                            </label>
+                            <label class="flex items-center">
+                                <input type="checkbox" class="export-field mr-1" data-field="seat_number" checked> 
+                                <span class="text-sm">Số ghế</span>
+                            </label>
+                            <label class="flex items-center">
+                                <input type="checkbox" class="export-field mr-1" data-field="status" checked> 
+                                <span class="text-sm">Trạng thái</span>
+                            </label>
+                            <label class="flex items-center">
+                                <input type="checkbox" class="export-field mr-1" data-field="note"> 
+                                <span class="text-sm">Ghi chú</span>
+                            </label>
+                        </div>
+                        <div class="flex-shrink-0">
+                            <a href="#" id="nhaxe-export-excel" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition inline-block" 
+                            data-base-url="<?php echo admin_url('admin-post.php?action=nhaxemyduyen_export_tickets&nhaxemyduyen_export_nonce=' . wp_create_nonce('nhaxemyduyen_export_nonce')); ?>">
+                                Xuất Excel
+                            </a>
+                        </div>
+                    </div>
                 </div>
             </form>
 
@@ -3100,9 +3607,7 @@ function nhaxemyduyen_manage_tickets() {
                 </table>
             </div>
         </div>
-    </div>
-
-    <style>
+    </div>    <style>
     .nhaxe-add-form.hidden {
         display: none;
     }
@@ -3142,6 +3647,38 @@ function nhaxemyduyen_manage_tickets() {
     }
     #nhaxe-messages .text-red-700 {
         color: #721c24;
+    }
+    
+    /* Styles for export checkboxes */
+    .export-field, #export_all {
+        width: 16px;
+        height: 16px;
+        accent-color: #2563eb;
+    }
+    
+    .export-field:checked, #export_all:checked {
+        background-color: #2563eb;
+        border-color: #2563eb;
+    }
+    
+    /* Responsive design for export options */
+    @media (max-width: 1024px) {
+        .export-options .flex {
+            flex-wrap: wrap;
+        }
+        .export-options label {
+            margin-bottom: 0.5rem;
+        }
+    }
+    
+    @media (max-width: 768px) {
+        .export-options .flex {
+            flex-direction: column;
+        }
+        .export-options label {
+            margin-right: 0;
+            margin-bottom: 0.25rem;
+        }
     }
     </style>
 
@@ -3392,7 +3929,7 @@ function nhaxemyduyen_manage_tickets() {
         $(document).on('click', '.nhaxe-cancel-ticket', function() {
             if ($(this).hasClass('cursor-not-allowed')) return;
 
-            if (!confirm('Bạn có chắc chắn muốn hủy vé này?')) return;
+            if (!confirm('Bạn có chắc chắn muốn XÓA vé này? Hành động này không thể hoàn tác.')) return;
 
             const ticketId = $(this).data('ticket-id');
             const nonce = $(this).data('nonce');
@@ -3422,18 +3959,37 @@ function nhaxemyduyen_manage_tickets() {
                     showMessage('Lỗi kết nối máy chủ khi hủy vé.', 'red');
                 }
             });
+        });        // Xử lý checkbox xuất Excel
+        $('#export_all').change(function() {
+            const isChecked = $(this).is(':checked');
+            $('.export-field').prop('checked', isChecked);
+        });
+
+        $('.export-field').change(function() {
+            const totalFields = $('.export-field').length;
+            const checkedFields = $('.export-field:checked').length;
+            $('#export_all').prop('checked', totalFields === checkedFields);
         });
 
         // Xử lý URL cho nút Xuất Excel
         function updateExportExcelUrl() {
             const formData = $('#nhaxe-filter-form').serialize();
             const baseUrl = $('#nhaxe-export-excel').data('base-url');
-            const exportUrl = baseUrl + '&' + formData;
+            
+            // Lấy các trường được chọn
+            const selectedFields = [];
+            $('.export-field:checked').each(function() {
+                selectedFields.push($(this).data('field'));
+            });
+            
+            let exportUrl = baseUrl + '&' + formData;
+            if (selectedFields.length > 0) {
+                exportUrl += '&export_fields=' + encodeURIComponent(selectedFields.join(','));
+            }
+            
             $('#nhaxe-export-excel').attr('href', exportUrl);
-        }
-
-        // Cập nhật URL khi form thay đổi
-        $('#nhaxe-filter-form input, #nhaxe-filter-form select').on('change', function() {
+        }        // Cập nhật URL khi form thay đổi
+        $('#nhaxe-filter-form input, #nhaxe-filter-form select, .export-field, #export_all').on('change', function() {
             updateExportExcelUrl();
         });
 
@@ -3480,7 +4036,6 @@ function nhaxemyduyen_export_tickets() {
         wp_die('Lỗi bảo mật: Nonce không hợp lệ.');
     }
 
-    // Phần còn lại của hàm giữ nguyên
     global $wpdb;
     $table_tickets = $wpdb->prefix . 'tickets';
     $table_trips = $wpdb->prefix . 'trips';
@@ -3500,6 +4055,33 @@ function nhaxemyduyen_export_tickets() {
     $filter_driver = isset($_GET['filter_driver']) ? intval($_GET['filter_driver']) : 0;
     $filter_vehicle = isset($_GET['filter_vehicle']) ? intval($_GET['filter_vehicle']) : 0;
     $filter_trip_id = isset($_GET['filter_trip_id']) ? intval($_GET['filter_trip_id']) : 0;
+
+    // Lấy các trường được chọn để xuất
+    $export_fields = isset($_GET['export_fields']) ? sanitize_text_field($_GET['export_fields']) : '';
+    $selected_fields = !empty($export_fields) ? explode(',', $export_fields) : [];
+
+    // Định nghĩa tất cả các trường có thể xuất
+    $all_fields = [
+        'ticket_code' => 'Mã vé',
+        'customer_name' => 'Khách hàng',
+        'customer_phone' => 'Số điện thoại',
+        'customer_email' => 'Email',
+        'from_location' => 'Điểm đi',
+        'to_location' => 'Điểm đến',
+        'pickup_location' => 'Điểm đón',
+        'dropoff_location' => 'Điểm trả',
+        'driver_name' => 'Tài xế',
+        'vehicle_plate' => 'Phương tiện',
+        'departure_time' => 'Giờ đi',
+        'seat_number' => 'Số ghế',
+        'status' => 'Trạng thái',
+        'note' => 'Ghi chú'
+    ];
+
+    // Nếu không có trường nào được chọn, sử dụng tất cả
+    if (empty($selected_fields)) {
+        $selected_fields = array_keys($all_fields);
+    }
 
     if (!empty($filter_departure_date)) {
         $date = DateTime::createFromFormat('m/d/Y', $filter_departure_date);
@@ -3581,8 +4163,15 @@ function nhaxemyduyen_export_tickets() {
     $sheet = $spreadsheet->getActiveSheet();
     $sheet->setTitle('Danh Sach Ve Xe');
 
-    // Định nghĩa tiêu đề
-    $headers = ['Mã vé', 'Khách hàng', 'Số điện thoại', 'Email', 'Điểm đi', 'Điểm đến', 'Điểm đón', 'Điểm trả', 'Tài xế', 'Phương tiện', 'Giờ đi', 'Số ghế', 'Trạng thái', 'Ghi chú'];
+    // Tạo tiêu đề chỉ cho các trường được chọn
+    $headers = [];
+    foreach ($selected_fields as $field) {
+        if (isset($all_fields[$field])) {
+            $headers[] = $all_fields[$field];
+        }
+    }
+
+    // Điền tiêu đề
     $column = 'A';
     foreach ($headers as $header) {
         $sheet->setCellValue($column . '1', $header);
@@ -3593,20 +4182,59 @@ function nhaxemyduyen_export_tickets() {
     // Điền dữ liệu
     $row = 2;
     foreach ($tickets as $ticket) {
-        $sheet->setCellValue('A' . $row, $ticket['ticket_code']);
-        $sheet->setCellValue('B' . $row, $ticket['customer_name']);
-        $sheet->setCellValue('C' . $row, $ticket['customer_phone']);
-        $sheet->setCellValue('D' . $row, $ticket['customer_email']);
-        $sheet->setCellValue('E' . $row, $ticket['from_location']);
-        $sheet->setCellValue('F' . $row, $ticket['to_location']);
-        $sheet->setCellValue('G' . $row, $ticket['pickup_location'] ?: $ticket['trip_pickup_location']);
-        $sheet->setCellValue('H' . $row, $ticket['dropoff_location'] ?: $ticket['trip_dropoff_location']);
-        $sheet->setCellValue('I' . $row, $ticket['driver_name'] ?: 'Chưa chọn');
-        $sheet->setCellValue('J' . $row, $ticket['vehicle_plate'] ?: 'Chưa chọn');
-        $sheet->setCellValue('K' . $row, date('m/d/Y H:i', strtotime($ticket['departure_time'])));
-        $sheet->setCellValue('L' . $row, $ticket['seat_number']);
-        $sheet->setCellValue('M' . $row, $ticket['status']);
-        $sheet->setCellValue('N' . $row, $ticket['note']);
+        $column = 'A';
+        foreach ($selected_fields as $field) {
+            $value = '';
+            switch ($field) {
+                case 'ticket_code':
+                    $value = $ticket['ticket_code'];
+                    break;
+                case 'customer_name':
+                    $value = $ticket['customer_name'];
+                    break;
+                case 'customer_phone':
+                    $value = $ticket['customer_phone'];
+                    break;
+                case 'customer_email':
+                    $value = $ticket['customer_email'];
+                    break;
+                case 'from_location':
+                    $value = $ticket['from_location'];
+                    break;
+                case 'to_location':
+                    $value = $ticket['to_location'];
+                    break;
+                case 'pickup_location':
+                    $value = $ticket['pickup_location'] ?: $ticket['trip_pickup_location'];
+                    break;
+                case 'dropoff_location':
+                    $value = $ticket['dropoff_location'] ?: $ticket['trip_dropoff_location'];
+                    break;
+                case 'driver_name':
+                    $value = $ticket['driver_name'] ?: 'Chưa chọn';
+                    break;
+                case 'vehicle_plate':
+                    $value = $ticket['vehicle_plate'] ?: 'Chưa chọn';
+                    break;
+                case 'departure_time':
+                    $value = date('m/d/Y H:i', strtotime($ticket['departure_time']));
+                    break;
+                case 'seat_number':
+                    $value = $ticket['seat_number'];
+                    break;
+                case 'status':
+                    $value = $ticket['status'];
+                    break;
+                case 'note':
+                    $value = $ticket['note'];
+                    break;
+            }
+            
+            if (isset($all_fields[$field])) {
+                $sheet->setCellValue($column . $row, $value);
+                $column++;
+            }
+        }
         $row++;
     }
 
@@ -4006,13 +4634,26 @@ function nhaxemyduyen_stats() {
     global $wpdb;
     $table_tickets = $wpdb->prefix . 'tickets';
     $table_trips = $wpdb->prefix . 'trips';
+    
+    // Thiết lập múi giờ Việt Nam (UTC+7)
+    date_default_timezone_set('Asia/Ho_Chi_Minh');
+    
+    // Kiểm tra quyền truy cập
+    if (!current_user_can('manage_options')) {
+        wp_die('Bạn không có quyền truy cập trang này.');
+    }
 
-    // Đăng ký Chart.js
+    // Đăng ký Chart.js và Tailwind CSS
     wp_enqueue_script('chart-js', 'https://cdn.jsdelivr.net/npm/chart.js', array(), null, true);
+    wp_enqueue_style('tailwind-css', 'https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css', array(), null);
 
+    // Lấy ngày hiện tại theo múi giờ Việt Nam
+    $current_date_vn = date('Y-m-d');
+    $current_month_vn = date('Y-m');
+    
     // Xử lý Tìm kiếm theo ngày/tháng
-    $filter_type = isset($_POST['filter_type']) ? $_POST['filter_type'] : 'day';
-    $filter_value = isset($_POST['filter_value']) ? $_POST['filter_value'] : ($filter_type === 'day' ? date('Y-m-d') : date('Y-m'));
+    $filter_type = isset($_POST['filter_type']) ? sanitize_text_field($_POST['filter_type']) : 'day';
+    $filter_value = isset($_POST['filter_value']) ? sanitize_text_field($_POST['filter_value']) : ($filter_type === 'day' ? $current_date_vn : $current_month_vn);
 
     // Xác định điều kiện lọc dựa trên loại
     if ($filter_type === 'day') {
@@ -4041,52 +4682,49 @@ function nhaxemyduyen_stats() {
         WHERE t.status = 'Đã thanh toán' AND $date_condition
     ", $filter_value)) ?: 0;
 
-    // Thống kê số chuyến xe
+    // Thống kê số chuyến xe (sửa lại để đếm tất cả chuyến xe)
     $trip_count = $wpdb->get_var($wpdb->prepare("
-        SELECT COUNT(DISTINCT tr.trip_id)
+        SELECT COUNT(tr.trip_id)
         FROM $table_trips tr
-        JOIN $table_tickets t ON t.trip_id = tr.trip_id
-        WHERE t.status = 'Đã thanh toán' AND $date_condition
+        WHERE $date_condition
     ", $filter_value)) ?: 0;
 
     // Thống kê tổng số ghế khả dụng
     $total_seats = $wpdb->get_var($wpdb->prepare("
         SELECT SUM(tr.available_seats)
         FROM $table_trips tr
-        JOIN $table_tickets t ON t.trip_id = tr.trip_id
-        WHERE t.status = 'Đã thanh toán' AND $date_condition
+        WHERE $date_condition
     ", $filter_value)) ?: ($trip_count * 44);
 
     // Tính phần trăm vé bán ra
     $ticket_percentage = $total_seats > 0 ? round(($ticket_count / $total_seats) * 100, 2) : 0;
 
-    // Thống kê so sánh với kỳ trước
+    // Thống kê so sánh với kỳ trước - chỉ tính doanh thu và vé đã thanh toán
     $prev_revenue = $wpdb->get_var($wpdb->prepare("
         SELECT SUM(tr.price)
         FROM $table_tickets t
         JOIN $table_trips tr ON t.trip_id = tr.trip_id
-        WHERE t.status = 'Đã thanh toán' AND " . str_replace($filter_value, $prev_filter_value, $date_condition),
+        WHERE t.status = 'Đã thanh toán' AND " . str_replace('%s', '%s', $date_condition),
         $prev_filter_value)) ?: 0;
 
     $prev_ticket_count = $wpdb->get_var($wpdb->prepare("
         SELECT COUNT(*)
         FROM $table_tickets t
         JOIN $table_trips tr ON t.trip_id = tr.trip_id
-        WHERE t.status = 'Đã thanh toán' AND " . str_replace($filter_value, $prev_filter_value, $date_condition),
+        WHERE t.status = 'Đã thanh toán' AND " . str_replace('%s', '%s', $date_condition),
         $prev_filter_value)) ?: 0;
 
+    // Tổng số chuyến xe kỳ trước
     $prev_trip_count = $wpdb->get_var($wpdb->prepare("
-        SELECT COUNT(DISTINCT tr.trip_id)
+        SELECT COUNT(tr.trip_id)
         FROM $table_trips tr
-        JOIN $table_tickets t ON t.trip_id = tr.trip_id
-        WHERE t.status = 'Đã thanh toán' AND " . str_replace($filter_value, $prev_filter_value, $date_condition),
+        WHERE " . str_replace('%s', '%s', $date_condition),
         $prev_filter_value)) ?: 0;
 
     $prev_total_seats = $wpdb->get_var($wpdb->prepare("
         SELECT SUM(tr.available_seats)
         FROM $table_trips tr
-        JOIN $table_tickets t ON t.trip_id = tr.trip_id
-        WHERE t.status = 'Đã thanh toán' AND " . str_replace($filter_value, $prev_filter_value, $date_condition),
+        WHERE " . str_replace('%s', '%s', $date_condition),
         $prev_filter_value)) ?: ($prev_trip_count * 44);
 
     $prev_ticket_percentage = $prev_total_seats > 0 ? round(($prev_ticket_count / $prev_total_seats) * 100, 2) : 0;
@@ -4094,316 +4732,433 @@ function nhaxemyduyen_stats() {
     // Tính phần trăm thay đổi
     $revenue_change = $prev_revenue > 0 ? round((($revenue - $prev_revenue) / $prev_revenue) * 100, 2) : ($revenue > 0 ? 100 : 0);
     $ticket_percentage_change = $prev_ticket_percentage > 0 ? round((($ticket_percentage - $prev_ticket_percentage) / $prev_ticket_percentage) * 100, 2) : ($ticket_percentage > 0 ? 100 : 0);
+    $trip_change = $prev_trip_count > 0 ? round((($trip_count - $prev_trip_count) / $prev_trip_count) * 100, 2) : ($trip_count > 0 ? 100 : 0);
+
+    // Tạo dữ liệu cho biểu đồ
+    $chart_labels = [];
+    $chart_revenue_data = [];
+    $chart_ticket_data = [];
+    
+    if ($filter_type === 'day') {
+        // Biểu đồ theo giờ trong ngày
+        for ($i = 0; $i < 24; $i++) {
+            $chart_labels[] = sprintf("%02d:00", $i);
+            
+            $hour_start = sprintf("%s %02d:00:00", $filter_value, $i);
+            $hour_end = sprintf("%s %02d:59:59", $filter_value, $i);
+            
+            $hour_revenue = $wpdb->get_var($wpdb->prepare("
+                SELECT SUM(tr.price)
+                FROM $table_tickets t
+                JOIN $table_trips tr ON t.trip_id = tr.trip_id
+                WHERE t.status = 'Đã thanh toán'
+                AND tr.departure_time BETWEEN %s AND %s
+            ", $hour_start, $hour_end)) ?: 0;
+            
+            $hour_tickets = $wpdb->get_var($wpdb->prepare("
+                SELECT COUNT(*)
+                FROM $table_tickets t
+                JOIN $table_trips tr ON t.trip_id = tr.trip_id
+                WHERE t.status = 'Đã thanh toán'
+                AND tr.departure_time BETWEEN %s AND %s
+            ", $hour_start, $hour_end)) ?: 0;
+            
+            $chart_revenue_data[] = $hour_revenue;
+            $chart_ticket_data[] = $hour_tickets;
+        }
+    } else {
+        // Biểu đồ theo ngày trong tháng
+        $days_in_month = date('t', strtotime($filter_value . '-01'));
+        for ($i = 1; $i <= $days_in_month; $i++) {
+            $chart_labels[] = sprintf("Ngày %d", $i);
+            
+            $day = sprintf("%s-%02d", $filter_value, $i);
+            
+            $day_revenue = $wpdb->get_var($wpdb->prepare("
+                SELECT SUM(tr.price)
+                FROM $table_tickets t
+                JOIN $table_trips tr ON t.trip_id = tr.trip_id
+                WHERE t.status = 'Đã thanh toán'
+                AND DATE(tr.departure_time) = %s
+            ", $day)) ?: 0;
+            
+            $day_tickets = $wpdb->get_var($wpdb->prepare("
+                SELECT COUNT(*)
+                FROM $table_tickets t
+                JOIN $table_trips tr ON t.trip_id = tr.trip_id
+                WHERE t.status = 'Đã thanh toán'
+                AND DATE(tr.departure_time) = %s
+            ", $day)) ?: 0;
+            
+            $chart_revenue_data[] = $day_revenue;
+            $chart_ticket_data[] = $day_tickets;
+        }
+    }
 
     ?>
-    <div class="wrap nhaxe-wrap">
-        <h1 class="nhaxe-title">Thống kê</h1>
+    <div class="min-h-screen bg-gray-50 py-8">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">            <!-- Header -->
+            <div class="mb-8">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <h1 class="text-3xl font-bold text-gray-900">📊 Thống kê nhà xe</h1>
+                        <p class="mt-2 text-lg text-gray-600">Báo cáo doanh thu và hiệu suất kinh doanh</p>
+                    </div>                    <div class="text-right">
+                        <div class="text-sm text-gray-500">Thời gian hiện tại (UTC+7)</div>
+                        <div class="text-lg font-semibold text-gray-900 current-time">
+                            🕐 <?php echo date('d/m/Y H:i:s'); ?>
+                        </div>
+                        <div class="text-sm text-blue-600 mt-1">
+                            📅 Hôm nay: <?php echo date('d/m/Y'); ?>
+                        </div>
+                    </div>
+                </div>
+            </div>
 
-        <!-- Card chứa form Tìm kiếm và thống kê -->
-        <div class="nhaxe-card">
-            <h2>Kết quả Thống kê</h2>
-
-            <!-- Form Tìm kiếm -->
-            <div class="nhaxe-filter-add-container">
-                <form method="post" action="" class="nhaxe-filter-form" id="nhaxe-stats-filter-form">
-                    <div class="nhaxe-filter-group">
-                        <select name="filter_type" id="filter_type" onchange="this.form.submit()">
-                            <option value="day" <?php selected($filter_type, 'day'); ?>>Theo ngày</option>
-                            <option value="month" <?php selected($filter_type, 'month'); ?>>Theo tháng</option>
+            <!-- Filter Form -->
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8">
+                <form method="post" action="" class="flex flex-wrap items-end gap-4" id="stats-filter-form">
+                    <div class="flex-1 min-w-48">
+                        <label for="filter_type" class="block text-sm font-medium text-gray-700 mb-2">Loại báo cáo</label>
+                        <select name="filter_type" id="filter_type" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            <option value="day" <?php selected($filter_type, 'day'); ?>>📅 Theo ngày</option>
+                            <option value="month" <?php selected($filter_type, 'month'); ?>>📆 Theo tháng</option>
                         </select>
-                        <?php if ($filter_type === 'day') : ?>
-                            <input type="date" name="filter_value" id="filter_value" value="<?php echo esc_attr($filter_value); ?>" max="<?php echo date('Y-m-d', strtotime('+1 year')); ?>">
+                    </div>
+                    
+                    <div class="flex-1 min-w-48">
+                        <label for="filter_value" class="block text-sm font-medium text-gray-700 mb-2">Thời gian</label>                        <?php if ($filter_type === 'day') : ?>
+                            <input type="date" name="filter_value" id="filter_value" value="<?php echo esc_attr($filter_value); ?>" max="<?php echo $current_date_vn; ?>" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                         <?php else : ?>
-                            <input type="month" name="filter_value" id="filter_value" value="<?php echo esc_attr($filter_value); ?>" max="<?php echo date('Y-m', strtotime('+1 year')); ?>">
+                            <input type="month" name="filter_value" id="filter_value" value="<?php echo esc_attr($filter_value); ?>" max="<?php echo $current_month_vn; ?>" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                         <?php endif; ?>
-                        <input type="submit" class="button nhaxe-button-primary" value="Tìm kiếm">
-                        <a href="#" id="nhaxe-export-excel" class="button nhaxe-button-secondary" 
+                    </div>
+                    
+                    <div class="flex gap-3">
+                        <button type="submit" class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium">
+                            🔍 Xem báo cáo
+                        </button>
+                        <a href="#" id="export-excel" class="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium" 
                            data-base-url="<?php echo admin_url('admin-post.php?action=nhaxemyduyen_export_stats&nhaxemyduyen_export_nonce=' . wp_create_nonce('nhaxemyduyen_export_nonce')); ?>">
-                            Xuất Excel
+                            📊 Xuất Excel
                         </a>
                     </div>
                 </form>
             </div>
 
-            <!-- Hiển thị thống kê -->
-            <div class="nhaxe-stats-container">
-                <div class="nhaxe-stats-table">
-                    <table class="widefat nhaxe-table">
-                        <tr>
-                            <th>Doanh thu</th>
-                            <td><?php echo esc_html(number_format($revenue, 0, ',', '.')) . ' VNĐ'; ?>
-                                <span class="nhaxe-change <?php echo $revenue_change >= 0 ? 'positive' : 'negative'; ?>">
-                                    (<?php echo $revenue_change >= 0 ? '+' : ''; ?><?php echo esc_html($revenue_change); ?>% so với <?php echo $filter_type === 'day' ? 'ngày trước' : 'tháng trước'; ?>)
-                                </span>
-                            </td>
-                        </tr>
-                        <tr>
-                            <th>Số vé đã thanh toán</th>
-                            <td><?php echo esc_html($ticket_count); ?></td>
-                        </tr>
-                        <tr>
-                            <th>Tỷ lệ vé bán ra</th>
-                            <td><?php echo esc_html($ticket_percentage); ?>% (<?php echo esc_html($ticket_count); ?>/<?php echo esc_html($total_seats); ?> ghế)
-                                <span class="nhaxe-change <?php echo $ticket_percentage_change >= 0 ? 'positive' : 'negative'; ?>">
-                                    (<?php echo $ticket_percentage_change >= 0 ? '+' : ''; ?><?php echo esc_html($ticket_percentage_change); ?>% so với <?php echo $filter_type === 'day' ? 'ngày trước' : 'tháng trước'; ?>)
-                                </span>
-                            </td>
-                        </tr>
-                        <tr>
-                            <th>Số chuyến xe</th>
-                            <td><?php echo esc_html($trip_count); ?></td>
-                        </tr>
-                    </table>
+            <!-- Stats Cards -->            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                <!-- Doanh thu -->
+                <div class="stats-card bg-gradient-to-r from-blue-500 to-blue-600 rounded-xl p-6 text-white shadow-lg">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-white text-sm font-medium opacity-90">Doanh thu</p>
+                            <p class="stats-number text-3xl font-bold text-white"><?php echo number_format($revenue, 0, ',', '.'); ?> ₫</p>
+                            <p class="text-white text-sm mt-1 opacity-80">
+                                <?php if ($revenue_change >= 0) : ?>
+                                    <span class="text-green-200 font-medium">▲ +<?php echo $revenue_change; ?>%</span>
+                                <?php else : ?>
+                                    <span class="text-red-200 font-medium">▼ <?php echo $revenue_change; ?>%</span>
+                                <?php endif; ?>
+                                so với kỳ trước
+                            </p>
+                        </div>
+                        <div class="text-4xl opacity-80">💰</div>
+                    </div>
                 </div>
 
-                <!-- Biểu đồ thống kê -->
-                <div class="nhaxe-stats-chart">
-                    <canvas id="nhaxeRevenueChart"></canvas>
+                <!-- Số vé bán ra -->
+                <div class="stats-card bg-gradient-to-r from-green-500 to-green-600 rounded-xl p-6 text-white shadow-lg">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-white text-sm font-medium opacity-90">Vé đã bán</p>
+                            <p class="stats-number text-3xl font-bold text-white"><?php echo number_format($ticket_count); ?></p>
+                            <p class="text-white text-sm mt-1 opacity-80">
+                                Tỷ lệ: <?php echo $ticket_percentage; ?>%
+                            </p>
+                        </div>
+                        <div class="text-4xl opacity-80">🎫</div>
+                    </div>
                 </div>
-            </div>
-        </div>
+
+                <!-- Số chuyến xe -->
+                <div class="stats-card bg-gradient-to-r from-purple-500 to-purple-600 rounded-xl p-6 text-white shadow-lg">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-white text-sm font-medium opacity-90">Chuyến xe</p>
+                            <p class="stats-number text-3xl font-bold text-white"><?php echo number_format($trip_count); ?></p>
+                            <p class="text-white text-sm mt-1 opacity-80">
+                                <?php if ($trip_change >= 0) : ?>
+                                    <span class="text-green-200 font-medium">▲ +<?php echo $trip_change; ?>%</span>
+                                <?php else : ?>
+                                    <span class="text-red-200 font-medium">▼ <?php echo $trip_change; ?>%</span>
+                                <?php endif; ?>
+                                so với kỳ trước
+                            </p>
+                        </div>
+                        <div class="text-4xl opacity-80">🚌</div>
+                    </div>
+                </div>                <!-- Tổng ghế -->
+                <div class="stats-card bg-gradient-to-r from-blue-500 to-pink-600 rounded-xl p-6 text-white shadow-lg">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-white text-sm font-medium opacity-90">Tổng ghế</p>
+                            <p class="stats-number text-3xl font-bold text-white"><?php echo number_format($total_seats); ?></p>
+                            <p class="text-white text-sm mt-1 opacity-80">
+                                Đã bán: <?php echo number_format($ticket_count); ?> ghế
+                            </p>
+                        </div>
+                        <div class="text-4xl opacity-80">💺</div>
+                    </div>
+                </div>
+            </div>            <!-- Chart -->
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <div class="mb-6">
+                    <h2 class="text-xl font-bold text-gray-900">📈 Biểu đồ doanh thu và vé bán ra</h2>
+                    <p class="text-gray-600 mt-1">
+                        <?php echo $filter_type === 'day' ? 'Theo giờ trong ngày ' . date('d/m/Y', strtotime($filter_value)) : 'Theo ngày trong tháng ' . date('m/Y', strtotime($filter_value . '-01')); ?>
+                    </p>
+                </div>
+                
+                <div class="chart-container relative" style="height: 400px;">
+                    <canvas id="statsChart"></canvas>
+                </div>
+            </div></div>
     </div>
 
-    <!-- CSS cho phần trăm thay đổi -->
     <style>
-        .nhaxe-change.positive {
-            color: green;
-            font-size: 0.9em;
-            margin-left: 10px;
+        /* Custom styles for stats cards */
+        .stats-card {
+            transition: all 0.3s ease;
         }
-        .nhaxe-change.negative {
-            color: red;
-            font-size: 0.9em;
-            margin-left: 10px;
+        
+        .stats-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
         }
-        .nhaxe-button-secondary {
-            background-color: #4CAF50;
-            color: white;
-            border: none;
-            padding: 8px 16px;
-            margin-left: 10px;
-            cursor: pointer;
+        
+        /* Animation for numbers */
+        .stats-number {
+            animation: countUp 0.8s ease-out;
         }
-        .nhaxe-button-secondary:hover {
-            background-color: #45a049;
+        
+        @keyframes countUp {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        /* Chart container */
+        .chart-container {
+            background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+            border-radius: 12px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+        
+        /* Responsive adjustments */
+        @media (max-width: 768px) {
+            .stats-card {
+                margin-bottom: 1rem;
+            }
         }
     </style>
 
-    <!-- Script để vẽ biểu đồ và xử lý URL xuất Excel -->
     <script>
-        jQuery(document).ready(function($) {
-            // Vẽ biểu đồ (giữ nguyên logic cũ)
-            var ctx = document.getElementById('nhaxeRevenueChart').getContext('2d');
-            var revenueChart = new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: [
-                        <?php
-                        if ($filter_type === 'day') {
-                            $labels = [];
-                            for ($i = 0; $i < 24; $i++) {
-                                $labels[] = sprintf("%02d:00", $i);
-                            }
-                            echo "'" . implode("','", $labels) . "'";
-                        } else {
-                            $days_in_month = date('t', strtotime($filter_value . '-01'));
-                            $labels = [];
-                            for ($i = 1; $i <= $days_in_month; $i++) {
-                                $labels[] = sprintf("Ngày %d", $i);
-                            }
-                            echo "'" . implode("','", $labels) . "'";
-                        }
-                        ?>
-                    ],
-                    datasets: [
-                        {
-                            label: 'Doanh thu (VNĐ)',
-                            data: [
-                                <?php
-                                if ($filter_type === 'day') {
-                                    $data = [];
-                                    for ($i = 0; $i < 24; $i++) {
-                                        $hour_start = sprintf("%s %02d:00:00", $filter_value, $i);
-                                        $hour_end = sprintf("%s %02d:59:59", $filter_value, $i);
-                                        $revenue = $wpdb->get_var($wpdb->prepare("
-                                            SELECT SUM(tr.price)
-                                            FROM $table_tickets t
-                                            JOIN $table_trips tr ON t.trip_id = tr.trip_id
-                                            WHERE t.status = 'Đã thanh toán'
-                                            AND t.created_at BETWEEN %s AND %s
-                                            AND $date_condition
-                                        ", $hour_start, $hour_end, $filter_value)) ?: 0;
-                                        $data[] = $revenue;
-                                    }
-                                    echo implode(',', $data);
-                                } else {
-                                    $days_in_month = date('t', strtotime($filter_value . '-01'));
-                                    $data = [];
-                                    for ($i = 1; $i <= $days_in_month; $i++) {
-                                        $day = sprintf("%s-%02d", $filter_value, $i);
-                                        $revenue = $wpdb->get_var($wpdb->prepare("
-                                            SELECT SUM(tr.price)
-                                            FROM $table_tickets t
-                                            JOIN $table_trips tr ON t.trip_id = tr.trip_id
-                                            WHERE t.status = 'Đã thanh toán'
-                                            AND DATE(tr.departure_time) = %s
-                                        ", $day)) ?: 0;
-                                        $data[] = $revenue;
-                                    }
-                                    echo implode(',', $data);
-                                }
-                                ?>
-                            ],
-                            backgroundColor: 'rgba(26, 115, 232, 0.7)',
-                            borderColor: 'rgba(26, 115, 232, 1)',
-                            borderWidth: 1,
-                            yAxisID: 'y'
-                        },
-                        {
-                            label: 'Tỷ lệ vé bán ra (%)',
-                            data: [
-                                <?php
-                                if ($filter_type === 'day') {
-                                    $data = [];
-                                    for ($i = 0; $i < 24; $i++) {
-                                        $hour_start = sprintf("%s %02d:00:00", $filter_value, $i);
-                                        $hour_end = sprintf("%s %02d:59:59", $filter_value, $i);
-                                        $ticket_count = $wpdb->get_var($wpdb->prepare("
-                                            SELECT COUNT(*)
-                                            FROM $table_tickets t
-                                            JOIN $table_trips tr ON t.trip_id = tr.trip_id
-                                            WHERE t.status = 'Đã thanh toán'
-                                            AND t.created_at BETWEEN %s AND %s
-                                            AND $date_condition
-                                        ", $hour_start, $hour_end, $filter_value)) ?: 0;
-                                        $total_seats = $wpdb->get_var($wpdb->prepare("
-                                            SELECT SUM(tr.available_seats)
-                                            FROM $table_trips tr
-                                            JOIN $table_tickets t ON t.trip_id = tr.trip_id
-                                            WHERE t.status = 'Đã thanh toán'
-                                            AND t.created_at BETWEEN %s AND %s
-                                            AND $date_condition
-                                        ", $hour_start, $hour_end, $filter_value)) ?: 44;
-                                        $percentage = $total_seats > 0 ? round(($ticket_count / $total_seats) * 100, 2) : 0;
-                                        $data[] = $percentage;
-                                    }
-                                    echo implode(',', $data);
-                                } else {
-                                    $days_in_month = date('t', strtotime($filter_value . '-01'));
-                                    $data = [];
-                                    for ($i = 1; $i <= $days_in_month; $i++) {
-                                        $day = sprintf("%s-%02d", $filter_value, $i);
-                                        $ticket_count = $wpdb->get_var($wpdb->prepare("
-                                            SELECT COUNT(*)
-                                            FROM $table_tickets t
-                                            JOIN $table_trips tr ON t.trip_id = tr.trip_id
-                                            WHERE t.status = 'Đã thanh toán'
-                                            AND DATE(tr.departure_time) = %s
-                                        ", $day)) ?: 0;
-                                        $total_seats = $wpdb->get_var($wpdb->prepare("
-                                            SELECT SUM(tr.available_seats)
-                                            FROM $table_trips tr
-                                            JOIN $table_tickets t ON t.trip_id = tr.trip_id
-                                            WHERE t.status = 'Đã thanh toán'
-                                            AND DATE(tr.departure_time) = %s
-                                        ", $day)) ?: 44;
-                                        $percentage = $total_seats > 0 ? round(($ticket_count / $total_seats) * 100, 2) : 0;
-                                        $data[] = $percentage;
-                                    }
-                                    echo implode(',', $data);
-                                }
-                                ?>
-                            ],
-                            type: 'line',
-                            borderColor: 'rgba(255, 99, 132, 1)',
-                            backgroundColor: 'rgba(255, 99, 132, 0.2)',
-                            fill: false,
-                            yAxisID: 'y1'
-                        }
-                    ]
-                },
+        document.addEventListener('DOMContentLoaded', function() {
+            // Khởi tạo biểu đồ
+            const ctx = document.getElementById('statsChart').getContext('2d');
+            
+            const chartData = {
+                labels: <?php echo json_encode($chart_labels); ?>,
+                datasets: [
+                    {
+                        label: 'Doanh thu (VNĐ)',
+                        data: <?php echo json_encode($chart_revenue_data); ?>,
+                        borderColor: 'rgb(59, 130, 246)',
+                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                        borderWidth: 3,
+                        fill: true,
+                        tension: 0.4,
+                        yAxisID: 'y'
+                    },
+                    {
+                        label: 'Số vé bán ra',
+                        data: <?php echo json_encode($chart_ticket_data); ?>,
+                        borderColor: 'rgb(34, 197, 94)',
+                        backgroundColor: 'rgba(34, 197, 94, 0.1)',
+                        borderWidth: 3,
+                        fill: true,
+                        tension: 0.4,
+                        yAxisID: 'y1'
+                    }
+                ]
+            };
+
+            const chart = new Chart(ctx, {
+                type: 'line',
+                data: chartData,
                 options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                            labels: {
+                                usePointStyle: true,
+                                font: {
+                                    size: 14
+                                }
+                            }
+                        },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false,
+                            callbacks: {
+                                label: function(context) {
+                                    let label = context.dataset.label || '';
+                                    if (label) {
+                                        label += ': ';
+                                    }
+                                    if (context.dataset.label === 'Doanh thu (VNĐ)') {
+                                        label += new Intl.NumberFormat('vi-VN').format(context.parsed.y) + ' ₫';
+                                    } else {
+                                        label += context.parsed.y + ' vé';
+                                    }
+                                    return label;
+                                }
+                            }
+                        }
+                    },
                     scales: {
+                        x: {
+                            display: true,
+                            title: {
+                                display: true,
+                                text: '<?php echo $filter_type === 'day' ? 'Giờ trong ngày' : 'Ngày trong tháng'; ?>',
+                                font: {
+                                    size: 14,
+                                    weight: 'bold'
+                                }
+                            },
+                            grid: {
+                                display: false
+                            }
+                        },
                         y: {
-                            beginAtZero: true,
+                            type: 'linear',
+                            display: true,
                             position: 'left',
                             title: {
                                 display: true,
-                                text: 'Doanh thu (VNĐ)'
+                                text: 'Doanh thu (VNĐ)',
+                                color: 'rgb(59, 130, 246)',
+                                font: {
+                                    size: 14,
+                                    weight: 'bold'
+                                }
                             },
                             ticks: {
                                 callback: function(value) {
-                                    return value.toLocaleString('vi-VN');
+                                    return new Intl.NumberFormat('vi-VN').format(value) + ' ₫';
                                 }
                             }
                         },
                         y1: {
-                            beginAtZero: true,
+                            type: 'linear',
+                            display: true,
                             position: 'right',
                             title: {
                                 display: true,
-                                text: 'Tỷ lệ vé bán ra (%)'
+                                text: 'Số vé bán ra',
+                                color: 'rgb(34, 197, 94)',
+                                font: {
+                                    size: 14,
+                                    weight: 'bold'
+                                }
                             },
                             grid: {
-                                drawOnChartArea: false
-                            }
-                        },
-                        x: {
-                            title: {
-                                display: true,
-                                text: '<?php echo $filter_type === 'day' ? 'Giờ trong ngày' : 'Ngày trong tháng'; ?>'
-                            }
+                                drawOnChartArea: false,
+                            },
                         }
                     },
-                    plugins: {
-                        legend: {
-                            display: true,
-                            position: 'top'
-                        },
-                        tooltip: {
-                            callbacks: {
-                                label: function(context) {
-                                    if (context.dataset.label === 'Doanh thu (VNĐ)') {
-                                        return context.dataset.label + ': ' + context.parsed.y.toLocaleString('vi-VN') + ' VNĐ';
-                                    } else {
-                                        return context.dataset.label + ': ' + context.parsed.y + '%';
-                                    }
-                                }
-                            }
-                        }
+                    interaction: {
+                        mode: 'nearest',
+                        axis: 'x',
+                        intersect: false
                     }
                 }
             });
 
+            // Xử lý thay đổi loại filter
+            const filterTypeElement = document.getElementById('filter_type');
+            if (filterTypeElement) {
+                filterTypeElement.addEventListener('change', function() {
+                    const statsForm = document.getElementById('stats-filter-form');
+                    if (statsForm) {
+                        statsForm.submit();
+                    }
+                });
+            }
+
             // Cập nhật URL cho nút Xuất Excel
             function updateExportExcelUrl() {
-                const formData = $('#nhaxe-stats-filter-form').serialize();
-                const baseUrl = $('#nhaxe-export-excel').data('base-url');
-                const exportUrl = baseUrl + '&' + formData;
-                $('#nhaxe-export-excel').attr('href', exportUrl);
+                const statsForm = document.getElementById('stats-filter-form');
+                const exportButton = document.getElementById('export-excel');
+                
+                if (!statsForm || !exportButton) return;
+                
+                const formData = new FormData(statsForm);
+                const params = new URLSearchParams();
+                for (let [key, value] of formData) {
+                    params.append(key, value);
+                }
+                const baseUrl = exportButton.dataset.baseUrl;
+                const exportUrl = baseUrl + '&' + params.toString();
+                exportButton.href = exportUrl;
             }
 
             // Cập nhật URL khi form thay đổi
-            $('#nhaxe-stats-filter-form input, #nhaxe-stats-filter-form select').on('change', function() {
+            const statsForm = document.getElementById('stats-filter-form');
+            if (statsForm) {
+                statsForm.addEventListener('change', updateExportExcelUrl);            
+                // Cập nhật URL ban đầu
                 updateExportExcelUrl();
-            });
+            }
 
-            // Cập nhật URL khi gửi form
-            $('#nhaxe-stats-filter-form').on('submit', function(e) {
-                e.preventDefault();
-                updateExportExcelUrl();
-                this.submit(); // Gửi form bình thường để cập nhật trang
-            });
+            // Cập nhật thời gian thực
+            function updateCurrentTime() {
+                const now = new Date();
+                const options = {
+                    timeZone: 'Asia/Ho_Chi_Minh',
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit'
+                };
+                
+                const vnTime = new Intl.DateTimeFormat('vi-VN', options).format(now);
+                const timeElement = document.querySelector('.current-time');
+                if (timeElement) {
+                    timeElement.textContent = '🕐 ' + vnTime.replace(/(\d{2})\/(\d{2})\/(\d{4}), (\d{2}):(\d{2}):(\d{2})/, '$1/$2/$3 $4:$5:$6');
+                }
+            }
 
-            // Cập nhật URL khi trang tải
-            updateExportExcelUrl();
+            // Cập nhật thời gian mỗi giây
+            setInterval(updateCurrentTime, 1000);
+
+            console.log('Thống kê đã tải thành công!');
         });
     </script>
     <?php
 }
+
 // Action để xử lý xuất file Excel cho thống kê
 add_action('admin_post_nhaxemyduyen_export_stats', 'nhaxemyduyen_export_stats');
 function nhaxemyduyen_export_stats() {
+    // Thiết lập múi giờ Việt Nam (UTC+7)
+    date_default_timezone_set('Asia/Ho_Chi_Minh');
+    
     // Kiểm tra quyền truy cập
     if (!current_user_can('manage_options')) {
         wp_die('Bạn không có quyền truy cập.');
@@ -4414,15 +5169,17 @@ function nhaxemyduyen_export_stats() {
         wp_die('Lỗi bảo mật: Nonce không hợp lệ.');
     }
 
-    
-
     global $wpdb;
     $table_tickets = $wpdb->prefix . 'tickets';
     $table_trips = $wpdb->prefix . 'trips';
 
+    // Lấy ngày hiện tại theo múi giờ Việt Nam
+    $current_date_vn = date('Y-m-d');
+    $current_month_vn = date('Y-m');
+
     // Lấy dữ liệu lọc từ GET
     $filter_type = isset($_GET['filter_type']) ? sanitize_text_field($_GET['filter_type']) : 'day';
-    $filter_value = isset($_GET['filter_value']) ? sanitize_text_field($_GET['filter_value']) : ($filter_type === 'day' ? date('Y-m-d') : date('Y-m'));
+    $filter_value = isset($_GET['filter_value']) ? sanitize_text_field($_GET['filter_value']) : ($filter_type === 'day' ? $current_date_vn : $current_month_vn);
 
     // Xác định điều kiện lọc dựa trên loại
     if ($filter_type === 'day') {
@@ -4451,20 +5208,18 @@ function nhaxemyduyen_export_stats() {
         WHERE t.status = 'Đã thanh toán' AND $date_condition
     ", $filter_value)) ?: 0;
 
-    // Thống kê số chuyến xe
+    // Thống kê số chuyến xe (sửa lại để đếm tất cả chuyến xe)
     $trip_count = $wpdb->get_var($wpdb->prepare("
-        SELECT COUNT(DISTINCT tr.trip_id)
+        SELECT COUNT(tr.trip_id)
         FROM $table_trips tr
-        JOIN $table_tickets t ON t.trip_id = tr.trip_id
-        WHERE t.status = 'Đã thanh toán' AND $date_condition
+        WHERE $date_condition
     ", $filter_value)) ?: 0;
 
     // Thống kê tổng số ghế khả dụng
     $total_seats = $wpdb->get_var($wpdb->prepare("
         SELECT SUM(tr.available_seats)
         FROM $table_trips tr
-        JOIN $table_tickets t ON t.trip_id = tr.trip_id
-        WHERE t.status = 'Đã thanh toán' AND $date_condition
+        WHERE $date_condition
     ", $filter_value)) ?: ($trip_count * 44);
 
     // Tính phần trăm vé bán ra
@@ -4475,28 +5230,26 @@ function nhaxemyduyen_export_stats() {
         SELECT SUM(tr.price)
         FROM $table_tickets t
         JOIN $table_trips tr ON t.trip_id = tr.trip_id
-        WHERE t.status = 'Đã thanh toán' AND " . str_replace($filter_value, $prev_filter_value, $date_condition),
+        WHERE t.status = 'Đã thanh toán' AND " . str_replace('%s', '%s', $date_condition),
         $prev_filter_value)) ?: 0;
 
     $prev_ticket_count = $wpdb->get_var($wpdb->prepare("
         SELECT COUNT(*)
         FROM $table_tickets t
         JOIN $table_trips tr ON t.trip_id = tr.trip_id
-        WHERE t.status = 'Đã thanh toán' AND " . str_replace($filter_value, $prev_filter_value, $date_condition),
+        WHERE t.status = 'Đã thanh toán' AND " . str_replace('%s', '%s', $date_condition),
         $prev_filter_value)) ?: 0;
 
     $prev_trip_count = $wpdb->get_var($wpdb->prepare("
-        SELECT COUNT(DISTINCT tr.trip_id)
+        SELECT COUNT(tr.trip_id)
         FROM $table_trips tr
-        JOIN $table_tickets t ON t.trip_id = tr.trip_id
-        WHERE t.status = 'Đã thanh toán' AND " . str_replace($filter_value, $prev_filter_value, $date_condition),
+        WHERE " . str_replace('%s', '%s', $date_condition),
         $prev_filter_value)) ?: 0;
 
     $prev_total_seats = $wpdb->get_var($wpdb->prepare("
         SELECT SUM(tr.available_seats)
         FROM $table_trips tr
-        JOIN $table_tickets t ON t.trip_id = tr.trip_id
-        WHERE t.status = 'Đã thanh toán' AND " . str_replace($filter_value, $prev_filter_value, $date_condition),
+        WHERE " . str_replace('%s', '%s', $date_condition),
         $prev_filter_value)) ?: ($prev_trip_count * 44);
 
     $prev_ticket_percentage = $prev_total_seats > 0 ? round(($prev_ticket_count / $prev_total_seats) * 100, 2) : 0;
@@ -4550,7 +5303,7 @@ function nhaxemyduyen_export_stats() {
 
 
 
-// trang quan lý tài xế
+// trang quản lý tài xế
 function nhaxemyduyen_manage_drivers() {
     global $wpdb;
     $table_drivers = $wpdb->prefix . 'drivers';
@@ -4774,11 +5527,14 @@ function nhaxemyduyen_manage_drivers() {
             .sm\:flex-row { flex-direction: column; }
             .sm\:space-x-4 { space-x: 0; space-y: 4px; }
         }
-    </style>
-
-    <script>
-        jQuery(document).ready(function($) {
-            // Toggle form thêm/sửa
+    </style>        <script>
+            // Khai báo ajaxurl cho WordPress admin
+            var ajaxurl = '<?php echo admin_url('admin-ajax.php'); ?>';
+            
+            jQuery(document).ready(function($) {
+                console.log('Vehicles page JS loaded, ajaxurl:', ajaxurl); // Debug
+                
+                // Toggle form thêm/sửa
             $(document).on('click', '.nhaxe-toggle-form', function() {
                 var action = $(this).data('action');
                 var driverId = $(this).data('driver-id');
@@ -5194,16 +5950,15 @@ function nhaxemyduyen_get_driver_trips_callback() {
     global $wpdb;
     $table_trips = $wpdb->prefix . 'trips';
     $table_locations = $wpdb->prefix . 'locations';
-    $driver_id = intval($_POST['driver_id']);
-
-    // Lấy danh sách chuyến xe của tài xế
+    $driver_id = intval($_POST['driver_id']);    // Lấy danh sách chuyến xe của tài xế
     $trips = $wpdb->get_results($wpdb->prepare("
         SELECT t.*, 
                l1.name as departure_name, 
                l2.name as destination_name
         FROM $table_trips t
-        LEFT JOIN $table_locations l1 ON t.departure_location_id = l1.location_id
-        LEFT JOIN $table_locations l2 ON t.destination_location_id = l2.location_id
+        LEFT JOIN {$wpdb->prefix}routes r ON t.route_id = r.route_id
+        LEFT JOIN $table_locations l1 ON r.from_location_id = l1.location_id
+        LEFT JOIN $table_locations l2 ON r.to_location_id = l2.location_id
         WHERE t.driver_id = %d
         ORDER BY t.departure_time DESC
     ", $driver_id), ARRAY_A);
@@ -5379,9 +6134,10 @@ function nhaxemyduyen_manage_vehicles() {
                 </table>
             </div>
 
-            <!-- Modal hiển thị danh sách chuyến xe -->
-        <div id="trips-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden flex items-center justify-center z-50 transition-opacity duration-300">
-            <div class="bg-white rounded-lg p-8 max-w-5xl w-full max-h-[85vh] overflow-y-auto relative shadow-2xl" style="max-height: 85vh !important;">
+        <!-- Modal hiển thị danh sách chuyến xe -->
+        <div id="trips-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 z-50 transition-opacity duration-300 hidden">
+            <div class="flex items-center justify-center min-h-screen">
+                <div class="bg-white rounded-lg p-8 max-w-5xl w-full max-h-[85vh] overflow-y-auto relative shadow-2xl" style="max-height: 85vh !important;">
                 <!-- Nút X đóng modal -->
                 <button class="nhaxe-close-modal absolute top-4 right-4 text-gray-500 hover:text-gray-700 transition" aria-label="Đóng">
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -5397,9 +6153,9 @@ function nhaxemyduyen_manage_vehicles() {
         </div>
 
         <style>
-            .nhaxe-add-form.hidden { display: none; }
-            #trips-modal.hidden { display: none; opacity: 0; }
-            #trips-modal { opacity: 1; }
+            .nhaxe-add-form.hidden { display: none !important; }
+            #trips-modal.hidden { display: none !important; opacity: 0; }
+            #trips-modal { display: flex !important; opacity: 1; }
             #trips-modal table { width: 100%; border-collapse: collapse; table-layout: fixed; }
             #trips-modal th, #trips-modal td { padding: 12px 16px; text-align: left; border-bottom: 1px solid #e5e7eb; word-wrap: break-word; overflow-wrap: break-word; }
             #trips-modal th { background-color: #f9fafb; font-size: 0.75rem; font-weight: 500; color: #6b7280; text-transform: uppercase; }
@@ -5441,8 +6197,14 @@ function nhaxemyduyen_manage_vehicles() {
 
         <script>
             jQuery(document).ready(function($) {
+                // Định nghĩa ajaxurl cho admin
+                var ajaxurl = '<?php echo admin_url('admin-ajax.php'); ?>';
+                
+                console.log('Document ready - vehicle management'); // Debug log
+                
                 // Toggle form thêm/sửa
                 $(document).on('click', '.nhaxe-toggle-form', function() {
+                    console.log('Toggle form clicked, action:', $(this).data('action')); // Debug
                     var action = $(this).data('action');
                     var vehicleId = $(this).data('vehicle-id');
 
@@ -5508,7 +6270,9 @@ function nhaxemyduyen_manage_vehicles() {
                 // Submit form thêm/sửa xe qua AJAX
                 $('#vehicle-form').submit(function(e) {
                     e.preventDefault();
+                    console.log('Vehicle form submitted'); // Debug
                     var formData = $(this).serialize();
+                    console.log('Form data:', formData); // Debug
 
                     $.ajax({
                         url: ajaxurl,
@@ -5532,9 +6296,11 @@ function nhaxemyduyen_manage_vehicles() {
 
                 // Xóa xe qua AJAX
                 $(document).on('click', '.nhaxe-delete-vehicle', function() {
+                    console.log('Delete vehicle clicked'); // Debug
                     if (!confirm('Bạn có chắc chắn muốn xóa?')) return;
 
                     var vehicleId = $(this).data('vehicle-id');
+                    console.log('Deleting vehicle ID:', vehicleId); // Debug
 
                     $.ajax({
                         url: ajaxurl,
@@ -5621,7 +6387,9 @@ function nhaxemyduyen_manage_vehicles() {
                 // Tìm kiếm danh sách xe qua AJAX
                 $('#filter-form').submit(function(e) {
                     e.preventDefault();
+                    console.log('Filter form submitted'); // Debug
                     var formData = $(this).serialize();
+                    console.log('Filter data:', formData); // Debug
 
                     $.ajax({
                         url: ajaxurl,
@@ -5632,7 +6400,7 @@ function nhaxemyduyen_manage_vehicles() {
                                 $('#vehicles-table tbody').html(response.data.html);
                             } else {
                                 console.error('Lỗi AJAX (filter_vehicles):', response);
-                                $('#nhaxe-message').html('<div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6 rounded-lg animate-slide-in"><p>' + response.data.message + '</p></div>');
+                                $('#nhaxe-message').html('<div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6 rounded-lg animate-slide-in"><p>' + (response.data ? response.data.message : 'Có lỗi xảy ra') + '</p></div>');
                             }
                         },
                         error: function(xhr) {
@@ -5654,7 +6422,7 @@ function nhaxemyduyen_manage_vehicles() {
                                 $('#vehicles-table tbody').html(response.data.html);
                             } else {
                                 console.error('Lỗi AJAX (refresh_vehicles):', response);
-                                $('#nhaxe-message').html('<div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6 rounded-lg animate-slide-in"><p>' + response.data.message + '</p></div>');
+                                $('#nhaxe-message').html('<div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6 rounded-lg animate-slide-in"><p>' + (response.data ? response.data.message : 'Có lỗi xảy ra') + '</p></div>');
                             }
                         },
                         error: function(xhr) {
@@ -5781,8 +6549,8 @@ function nhaxemyduyen_update_vehicle_status_callback() {
 // AJAX Tìm kiếm xe
 add_action('wp_ajax_nhaxemyduyen_filter_vehicles', 'nhaxemyduyen_filter_vehicles_callback');
 function nhaxemyduyen_filter_vehicles_callback() {
-    check_ajax_referer('nhaxemyduyen_vehicle_action', 'nhaxemyduyen_vehicle_nonce');
-
+    // Không cần kiểm tra nonce cho filter vì đây là action đơn giản
+    
     global $wpdb;
     $table_vehicles = $wpdb->prefix . 'vehicles';
     $table_trips = $wpdb->prefix . 'trips';

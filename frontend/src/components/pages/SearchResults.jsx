@@ -112,39 +112,73 @@ function SearchResults() {
     }
   }, [initialTrips, date]);
 
-  // Nếu được chuyển từ nút 'Tìm chuyến xe khác', hiển thị tất cả chuyến xe hiện tại và tương lai
+  // Nếu được chuyển từ nút 'Tìm chuyến xe khác' hoặc từ chat, hiển thị tất cả chuyến xe hiện tại và tương lai
   useEffect(() => {
     if (location.state?.reset) {
       setIsLoading(true);
-      tripService.getTrips()
-        .then((allTrips) => {
-          const formattedTrips = allTrips
-            .filter((trip) => isFutureOrTodayTrip(trip.departure_time))
-            .map((trip) => {
-              const departureTime = trip.departure_time ? new Date(trip.departure_time) : null;
-              let timeCategory = "Không xác định";
-              if (departureTime && !isNaN(departureTime.getTime())) {
-                const hours = departureTime.getHours();
-                if (hours >= 5 && hours < 12) timeCategory = "Morning";
-                else if (hours >= 12 && hours < 17) timeCategory = "Afternoon";
-                else timeCategory = "Evening";
-              }
-              return {
-                id: trip.trip_id || `trip-${Math.random()}`,
-                pickup_location: trip.pickup_location || "Không xác định",
-                dropoff_location: trip.dropoff_location || "Không xác định",
-                date: trip.departure_time ? formatDate(trip.departure_time) : "Không xác định",
-                time: timeCategory,
-                price: parseFloat(trip.price) || 0,
-                availableSeats: parseInt(trip.available_seats) || 0,
-                bus_image: trip.bus_image || "",
-                company: "Nhà Xe Mỹ Duyên",
-                departure_time: trip.departure_time || "",
-              };
-            });
-          setTrips(formattedTrips);
-        })
-        .finally(() => setIsLoading(false));
+      
+      // Kiểm tra xem có sẵn initialTrips từ chat không
+      if (location.state.initialTrips && Array.isArray(location.state.initialTrips)) {
+        console.log("Using pre-fetched trips from chat", location.state.initialTrips.length);
+        const formattedTrips = location.state.initialTrips
+          .filter((trip) => isFutureOrTodayTrip(trip.departure_time))
+          .map((trip) => {
+            const departureTime = trip.departure_time ? new Date(trip.departure_time) : null;
+            let timeCategory = "Không xác định";
+            if (departureTime && !isNaN(departureTime.getTime())) {
+              const hours = departureTime.getHours();
+              if (hours >= 5 && hours < 12) timeCategory = "Morning";
+              else if (hours >= 12 && hours < 17) timeCategory = "Afternoon";
+              else timeCategory = "Evening";
+            }
+            return {
+              id: trip.trip_id || `trip-${Math.random()}`,
+              pickup_location: trip.pickup_location || "Không xác định",
+              dropoff_location: trip.dropoff_location || "Không xác định",
+              date: trip.departure_time ? formatDate(trip.departure_time) : "Không xác định",
+              time: timeCategory,
+              price: parseFloat(trip.price) || 0,
+              availableSeats: parseInt(trip.available_seats) || 0,
+              bus_image: trip.bus_image || "",
+              company: "Nhà Xe Mỹ Duyên",
+              departure_time: trip.departure_time || "",
+            };
+          });
+        setTrips(formattedTrips);
+        setIsLoading(false);
+      } else {
+        // Nếu không có initialTrips, gọi API như bình thường
+        console.log("Fetching trips from API");
+        tripService.getTrips()
+          .then((allTrips) => {
+            const formattedTrips = allTrips
+              .filter((trip) => isFutureOrTodayTrip(trip.departure_time))
+              .map((trip) => {
+                const departureTime = trip.departure_time ? new Date(trip.departure_time) : null;
+                let timeCategory = "Không xác định";
+                if (departureTime && !isNaN(departureTime.getTime())) {
+                  const hours = departureTime.getHours();
+                  if (hours >= 5 && hours < 12) timeCategory = "Morning";
+                  else if (hours >= 12 && hours < 17) timeCategory = "Afternoon";
+                  else timeCategory = "Evening";
+                }
+                return {
+                  id: trip.trip_id || `trip-${Math.random()}`,
+                  pickup_location: trip.pickup_location || "Không xác định",
+                  dropoff_location: trip.dropoff_location || "Không xác định",
+                  date: trip.departure_time ? formatDate(trip.departure_time) : "Không xác định",
+                  time: timeCategory,
+                  price: parseFloat(trip.price) || 0,
+                  availableSeats: parseInt(trip.available_seats) || 0,
+                  bus_image: trip.bus_image || "",
+                  company: "Nhà Xe Mỹ Duyên",
+                  departure_time: trip.departure_time || "",
+                };
+              });
+            setTrips(formattedTrips);
+          })
+          .finally(() => setIsLoading(false));
+      }
     }
   }, [location.state]);
 
@@ -194,6 +228,18 @@ function SearchResults() {
     return updatedTrips;
   }, [filters, sortOption, trips]);
 
+  // Tính toán số lượng chuyến xe có thể đặt được (chưa khởi hành)
+  const availableTripsCount = useMemo(() => {
+    if (!filteredTrips || filteredTrips.length === 0) return 0;
+    
+    const currentDate = new Date();
+    return filteredTrips.filter(trip => {
+      if (!trip.departure_time) return false;
+      const departureDate = new Date(trip.departure_time);
+      return !isNaN(departureDate.getTime()) && departureDate > currentDate;
+    }).length;
+  }, [filteredTrips]);
+
   const uniquePickups = [...new Set(trips.map((trip) => trip.pickup_location))];
   const uniqueDropoffs = [...new Set(trips.map((trip) => trip.dropoff_location))];
 
@@ -210,54 +256,101 @@ function SearchResults() {
 
   // Polling để cập nhật danh sách chuyến xe nhưng không render lại giao diện nếu không có thay đổi
   useEffect(() => {
+    // Nếu có cờ skipPolling, không thực hiện polling để tránh mất dữ liệu
+    if (location.state?.skipPolling) {
+      console.log("Polling skipped due to skipPolling flag");
+      return;
+    }
+    
     let pollingInterval;
     let lastTripsJson = JSON.stringify(trips);
+    
+    // Hàm thực hiện polling
     const pollTrips = async () => {
       try {
         const allTrips = await tripService.getTrips();
-        // Lọc đúng ngày hiện tại (local) và đúng tuyến đường
-        const normalizedDate = normalizeDate(date);
-        const filtered = allTrips.filter((trip) => {
-          const tripDate = trip.departure_time ? normalizeDate(trip.departure_time) : "";
-          // Lọc đúng tuyến đường (from_location, to_location)
-          return tripDate === normalizedDate &&
-            trip.from_location === departure &&
-            trip.to_location === destination;
-        });
-        const newTripsJson = JSON.stringify(filtered);
-        if (newTripsJson !== lastTripsJson) {
-          setTrips(filtered.map((trip) => ({
-            id: trip.trip_id || `trip-${Math.random()}`,
-            pickup_location: trip.pickup_location || "Không xác định",
-            dropoff_location: trip.dropoff_location || "Không xác định",
-            date: formatDate(normalizedDate),
-            time: (() => {
+        
+        // Kiểm tra xem có reset flag hay không
+        if (location.state?.reset) {
+          // Nếu có reset, chỉ cập nhật khi số lượng chuyến thay đổi đáng kể
+          // hoặc có chuyến xe mới xuất hiện/mất đi
+          const currentTripsCount = trips.length;
+          const futureTrips = allTrips.filter(trip => isFutureOrTodayTrip(trip.departure_time));
+          
+          // Chỉ cập nhật nếu có sự thay đổi lớn về số lượng chuyến xe
+          if (Math.abs(futureTrips.length - currentTripsCount) > 1) {
+            const formattedTrips = futureTrips.map((trip) => {
               const departureTime = trip.departure_time ? new Date(trip.departure_time) : null;
+              let timeCategory = "Không xác định";
               if (departureTime && !isNaN(departureTime.getTime())) {
                 const hours = departureTime.getHours();
-                if (hours >= 5 && hours < 12) return "Morning";
-                if (hours >= 12 && hours < 17) return "Afternoon";
-                return "Evening";
+                if (hours >= 5 && hours < 12) timeCategory = "Morning";
+                else if (hours >= 12 && hours < 17) timeCategory = "Afternoon";
+                else timeCategory = "Evening";
               }
-              return "Không xác định";
-            })(),
-            price: parseFloat(trip.price) || 0,
-            availableSeats: parseInt(trip.available_seats) || 0,
-            bus_image: trip.bus_image || "",
-            company: "Nhà Xe Mỹ Duyên",
-            departure_time: trip.departure_time || "",
-          })));
-          lastTripsJson = newTripsJson;
+              return {
+                id: trip.trip_id || `trip-${Math.random()}`,
+                pickup_location: trip.pickup_location || "Không xác định",
+                dropoff_location: trip.dropoff_location || "Không xác định",
+                date: trip.departure_time ? formatDate(trip.departure_time) : "Không xác định",
+                time: timeCategory,
+                price: parseFloat(trip.price) || 0,
+                availableSeats: parseInt(trip.available_seats) || 0,
+                bus_image: trip.bus_image || "",
+                company: "Nhà Xe Mỹ Duyên",
+                departure_time: trip.departure_time || "",
+              };
+            });
+            console.log("Updating trips from reset polling: ", formattedTrips.length);
+            setTrips(formattedTrips);
+          }
+        } else if (date && departure && destination) {
+          // Lọc đúng ngày hiện tại (local) và đúng tuyến đường
+          const normalizedDate = normalizeDate(date);
+          const filtered = allTrips.filter((trip) => {
+            const tripDate = trip.departure_time ? normalizeDate(trip.departure_time) : "";
+            // Lọc đúng tuyến đường (from_location, to_location)
+            return tripDate === normalizedDate &&
+              trip.from_location === departure &&
+              trip.to_location === destination;
+          });
+          const newTripsJson = JSON.stringify(filtered);
+          if (newTripsJson !== lastTripsJson) {
+            console.log("Updating trips from normal polling");
+            setTrips(filtered.map((trip) => ({
+              id: trip.trip_id || `trip-${Math.random()}`,
+              pickup_location: trip.pickup_location || "Không xác định",
+              dropoff_location: trip.dropoff_location || "Không xác định",
+              date: formatDate(normalizedDate),
+              time: (() => {
+                const departureTime = trip.departure_time ? new Date(trip.departure_time) : null;
+                if (departureTime && !isNaN(departureTime.getTime())) {
+                  const hours = departureTime.getHours();
+                  if (hours >= 5 && hours < 12) return "Morning";
+                  if (hours >= 12 && hours < 17) return "Afternoon";
+                  return "Evening";
+                }
+                return "Không xác định";
+              })(),
+              price: parseFloat(trip.price) || 0,
+              availableSeats: parseInt(trip.available_seats) || 0,
+              bus_image: trip.bus_image || "",
+              company: "Nhà Xe Mỹ Duyên",
+              departure_time: trip.departure_time || "",
+            })));
+            lastTripsJson = newTripsJson;
+          }
         }
       } catch (err) {
-        // Có thể log lỗi nếu cần
+        console.error("Polling error:", err);
       }
     };
-    if (date) {
-      pollingInterval = setInterval(pollTrips, 3000);
-    }
+    
+    // Thực hiện polling với khoảng thời gian dài hơn
+    pollingInterval = setInterval(pollTrips, 10000); // 10 giây thay vì 3 giây
+    
     return () => clearInterval(pollingInterval);
-  }, [date, trips, departure, destination]);
+  }, [date, trips, departure, destination, location.state]);
 
   if ((!initialTrips || !departure || !destination || !date) && !location.state?.reset) {
     return (
@@ -514,7 +607,7 @@ function SearchResults() {
               </h1>
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
                 <p className="text-blue-600 text-lg mb-3 sm:mb-0 font-montserrat">
-                  {filteredTrips.length} chuyến xe được tìm thấy
+                  {availableTripsCount} chuyến xe có thể đặt được
                 </p>
                 <div className="flex items-center gap-3">
                   <label className="text-base font-medium text-gray-700 font-roboto">Sắp xếp theo</label>
@@ -548,7 +641,7 @@ function SearchResults() {
                   </div>
                 ))}
               </div>
-            ) : filteredTrips.length === 0 ? (
+            ) : availableTripsCount === 0 ? (
               <section className="bg-white rounded-2xl shadow-lg p-10 text-center border border-blue-100">
                 <img
                   src={route_no_schedule_2}
@@ -581,6 +674,7 @@ function SearchResults() {
                       onSelect={() =>
                         setExpandedTripId(expandedTripId === trip.id ? null : trip.id)
                       }
+                      hideIfDeparted={true}
                     />
                     {expandedTripId === trip.id && (
                       <div
